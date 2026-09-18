@@ -1,0 +1,22 @@
+{
+  "name": "discord-voice-bot-js",
+  "version": "2.0.0",
+  "description": "Discord Voice & AI Bot in Node.js",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@discordjs/opus": "^0.10.0",
+    "@discordjs/voice": "^0.16.1",
+    "discord.js": "^14.14.1",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "gtts": "^0.2.1",
+    "libsodium-wrappers": "^0.7.13",
+    "sqlite3": "^5.1.7"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
