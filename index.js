@@ -127,7 +127,7 @@ async function sendBlogLog(guild, tag, content) {
     }
 }
 
-// Bảng điều khiển nút bấm phân cấp chuẩn xác, giao diện trực quan chuyên nghiệp
+// Bảng điều khiển nút bấm chuẩn xác, nút đuổi dùng icon dép lào (🩴)
 function getControlRows(isOwner) {
     if (isOwner) {
         const row1 = new ActionRowBuilder().addComponents(
@@ -144,7 +144,7 @@ function getControlRows(isOwner) {
         const row3 = new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId('vc_allow').setLabel('Cấp quyền').setStyle(ButtonStyle.Success).setEmoji('✅'),
             new ButtonBuilder().setCustomId('vc_deny').setLabel('Cấm').setStyle(ButtonStyle.Danger).setEmoji('🚫'),
-            new ButtonBuilder().setCustomId('vc_kick').setLabel('Đuổi').setStyle(ButtonStyle.Danger).setEmoji('👞'),
+            new ButtonBuilder().setCustomId('vc_kick').setLabel('Đuổi').setStyle(ButtonStyle.Danger).setEmoji('🩴'),
             new ButtonBuilder().setCustomId('vc_transfer').setLabel('Chuyển chủ').setStyle(ButtonStyle.Success).setEmoji('👑')
         );
         return [row1, row2, row3];
@@ -326,7 +326,7 @@ client.on('interactionCreate', async (interaction) => {
             return;
         }
 
-        // Xử lý chọn khu vực phòng thoại với Tự động ở đầu và đầy đủ tùy chọn
+        // Xử lý chọn khu vực phòng thoại với đầy đủ full danh sách từ Discord
         if (interaction.customId === 'region_select_menu') {
             const channel = interaction.member?.voice?.channel;
             if (!channel) return interaction.reply({ content: '❌ Bạn cần ở trong phòng thoại để đổi khu vực.', ephemeral: true });
@@ -396,28 +396,28 @@ client.on('interactionCreate', async (interaction) => {
             await channel.permissionOverwrites.edit(interaction.guild.roles.everyone, { Connect: false });
             await channel.permissionOverwrites.edit(interaction.user, { Connect: true });
             await sendBlogLog(interaction.guild, 'KHÓA', `${interaction.user} đã khóa phòng`);
-            await interaction.reply({ content: '🔒 Đã khóa phòng thành công. Chỉ những người được cấp quyền mới có thể vào.', ephemeral: true });
+            return interaction.reply({ content: '🔒 Đã khóa phòng thành công. Chỉ những người được cấp quyền mới có thể vào.', ephemeral: true });
         }
         // Nút Mở phòng
         else if (customId === 'vc_unlock') {
             await channel.permissionOverwrites.edit(interaction.guild.roles.everyone, { Connect: null });
             await sendBlogLog(interaction.guild, 'MỞ KHÓA', `${interaction.user} đã mở khóa phòng`);
-            await interaction.reply({ content: '🔓 Đã mở khóa phòng thành công. Mọi người có thể tự do vào phòng.', ephemeral: true });
+            return interaction.reply({ content: '🔓 Đã mở khóa phòng thành công. Mọi người có thể tự do vào phòng.', ephemeral: true });
         }
         // Nút Ẩn phòng: Chặn hoàn toàn ViewChannel đối với @everyone, thành viên thường không nhìn thấy kênh
         else if (customId === 'vc_hide') {
             await channel.permissionOverwrites.edit(interaction.guild.roles.everyone, { ViewChannel: false });
             await channel.permissionOverwrites.edit(interaction.user, { ViewChannel: true });
             await sendBlogLog(interaction.guild, 'ẨN', `${interaction.user} đã ẩn phòng`);
-            await interaction.reply({ content: '🥷 Đã ẩn phòng thành công. Thành viên thông thường sẽ không thấy kênh này trên danh sách.', ephemeral: true });
+            return interaction.reply({ content: '🥷 Đã ẩn phòng thành công. Thành viên thông thường sẽ không thấy kênh này trên danh sách.', ephemeral: true });
         }
         // Nút Hiện phòng: Trả lại trạng thái mặc định cho @everyone
         else if (customId === 'vc_unhide') {
             await channel.permissionOverwrites.edit(interaction.guild.roles.everyone, { ViewChannel: null });
             await sendBlogLog(interaction.guild, 'HIỆN', `${interaction.user} đã hiển thị lại phòng`);
-            await interaction.reply({ content: '👁️ Đã hiện phòng thành công. Mọi người có thể nhìn thấy kênh trở lại.', ephemeral: true });
+            return interaction.reply({ content: '👁️ Đã hiện phòng thành công. Mọi người có thể nhìn thấy kênh trở lại.', ephemeral: true });
         }
-        // Nút Chọn khu vực với Tự động ở đầu và đầy đủ lựa chọn
+        // Nút Chọn khu vực với Full danh sách Discord chuẩn xác
         else if (customId === 'vc_region') {
             const selectMenu = new StringSelectMenuBuilder()
                 .setCustomId('region_select_menu')
@@ -428,8 +428,17 @@ client.on('interactionCreate', async (interaction) => {
                     { label: 'Hong Kong', value: 'hongkong', description: 'Khu vực châu Á' },
                     { label: 'Japan (Nhật Bản)', value: 'japan', description: 'Khu vực Đông Á' },
                     { label: 'Sydney (Úc)', value: 'sydney', description: 'Khu vực Châu Đại Dương' },
+                    { label: 'India (Ấn Độ)', value: 'india', description: 'Khu vực Nam Á' },
                     { label: 'Brazil', value: 'brazil', description: 'Khu vực Nam Mỹ' },
-                    { label: 'US Central (Mỹ)', value: 'us-central', description: 'Khu vực Bắc Mỹ' }
+                    { label: 'US Central (Mỹ Trung)', value: 'us-central', description: 'Khu vực Bắc Mỹ' },
+                    { label: 'US East (Mỹ Đông)', value: 'us-east', description: 'Khu vực Bắc Mỹ' },
+                    { label: 'US West (Mỹ Tây)', value: 'us-west', description: 'Khu vực Bắc Mỹ' },
+                    { label: 'US South (Mỹ Nam)', value: 'us-south', description: 'Khu vực Bắc Mỹ' },
+                    { label: 'Europe (Châu Âu)', value: 'europe', description: 'Khu vực châu Âu chung' },
+                    { label: 'Frankfurt (Đức)', value: 'frankfurt', description: 'Khu vực Trung Âu' },
+                    { label: 'Amsterdam (Hà Lan)', value: 'amsterdam', description: 'Khu vực Tây Âu' },
+                    { label: 'Stockholm (Thụy Điển)', value: 'stockholm', description: 'Khu vực Bắc Âu' },
+                    { label: 'London (Anh)', value: 'london', description: 'Khu vực Tây Âu' }
                 ]);
             const row = new ActionRowBuilder().addComponents(selectMenu);
             return interaction.reply({ content: '🌐 **Vui lòng chọn khu vực máy chủ âm thanh phù hợp bên dưới:**', components: [row], ephemeral: true });
@@ -444,7 +453,7 @@ client.on('interactionCreate', async (interaction) => {
                 .setMaxLength(40)
                 .setRequired(true);
             modal.addComponents(new ActionRowBuilder().addComponents(input));
-            await interaction.showModal(modal);
+            return interaction.showModal(modal);
         } 
         else if (customId === 'vc_limit') {
             const modal = new ModalBuilder().setCustomId('modal_limit').setTitle('⚙️ Giới hạn số người');
@@ -456,7 +465,7 @@ client.on('interactionCreate', async (interaction) => {
                 .setMaxLength(2)
                 .setRequired(true);
             modal.addComponents(new ActionRowBuilder().addComponents(input));
-            await interaction.showModal(modal);
+            return interaction.showModal(modal);
         } 
         else if (customId === 'vc_allow') {
             const modal = new ModalBuilder().setCustomId('modal_allow').setTitle('✅ Cấp quyền vào phòng');
@@ -468,7 +477,7 @@ client.on('interactionCreate', async (interaction) => {
                 .setMaxLength(25)
                 .setRequired(true);
             modal.addComponents(new ActionRowBuilder().addComponents(input));
-            await interaction.showModal(modal);
+            return interaction.showModal(modal);
         } 
         else if (customId === 'vc_deny') {
             const modal = new ModalBuilder().setCustomId('modal_deny').setTitle('🚫 Cấm thành viên');
@@ -480,10 +489,10 @@ client.on('interactionCreate', async (interaction) => {
                 .setMaxLength(25)
                 .setRequired(true);
             modal.addComponents(new ActionRowBuilder().addComponents(input));
-            await interaction.showModal(modal);
+            return interaction.showModal(modal);
         } 
         else if (customId === 'vc_kick') {
-            const modal = new ModalBuilder().setCustomId('modal_kick').setTitle('👞 Mời rời phòng');
+            const modal = new ModalBuilder().setCustomId('modal_kick').setTitle('🩴 Mời rời phòng');
             const input = new TextInputBuilder()
                 .setCustomId('input_uid')
                 .setLabel('Nhập ID Discord thành viên cần mời ra')
@@ -492,7 +501,7 @@ client.on('interactionCreate', async (interaction) => {
                 .setMaxLength(25)
                 .setRequired(true);
             modal.addComponents(new ActionRowBuilder().addComponents(input));
-            await interaction.showModal(modal);
+            return interaction.showModal(modal);
         } 
         else if (customId === 'vc_transfer') {
             const modal = new ModalBuilder().setCustomId('modal_transfer').setTitle('👑 Chuyển chủ phòng');
@@ -504,7 +513,7 @@ client.on('interactionCreate', async (interaction) => {
                 .setMaxLength(25)
                 .setRequired(true);
             modal.addComponents(new ActionRowBuilder().addComponents(input));
-            await interaction.showModal(modal);
+            return interaction.showModal(modal);
         }
         return;
     }
@@ -524,7 +533,7 @@ client.on('interactionCreate', async (interaction) => {
             const newRoomName = `${ROOM_PREFIX}${newNameVal}`;
             await channel.setName(newRoomName);
             await sendBlogLog(interaction.guild, 'ĐỔI TÊN', `${interaction.user} đổi \`${oldName}\` ➔ \`${newRoomName}\``);
-            await interaction.reply({ content: `✅ Đã đổi tên phòng thành: **${newNameVal}**`, ephemeral: true });
+            return interaction.reply({ content: `✅ Đã đổi tên phòng thành: **${newNameVal}**`, ephemeral: true });
         } else if (interaction.customId === 'modal_limit') {
             const limitVal = parseInt(interaction.fields.getTextInputValue('input_limit'));
             if (isNaN(limitVal) || limitVal < 0 || limitVal > 99) {
@@ -532,7 +541,7 @@ client.on('interactionCreate', async (interaction) => {
             }
             await channel.setUserLimit(limitVal);
             await sendBlogLog(interaction.guild, 'GIỚI HẠN', `${interaction.user} đặt giới hạn phòng thành ${limitVal}`);
-            await interaction.reply({ content: `✅ Đã cập nhật giới hạn phòng thành **${limitVal}** người.`, ephemeral: true });
+            return interaction.reply({ content: `✅ Đã cập nhật giới hạn phòng thành **${limitVal}** người.`, ephemeral: true });
         } else if (['modal_allow', 'modal_deny', 'modal_kick'].includes(interaction.customId)) {
             const uidStr = interaction.fields.getTextInputValue('input_uid').trim();
             const uid = parseInt(uidStr);
@@ -548,21 +557,21 @@ client.on('interactionCreate', async (interaction) => {
             if (interaction.customId === 'modal_allow') {
                 await channel.permissionOverwrites.edit(targetMember, { Connect: true, ViewChannel: true });
                 await sendBlogLog(interaction.guild, 'CẤP QUYỀN', `${interaction.user} cấp quyền cho ${targetMember}`);
-                await interaction.reply({ content: `✅ Đã cấp quyền vào phòng thành công cho **${targetMember.displayName}**.`, ephemeral: true });
+                return interaction.reply({ content: `✅ Đã cấp quyền vào phòng thành công cho **${targetMember.displayName}**.`, ephemeral: true });
             } else if (interaction.customId === 'modal_deny') {
                 await channel.permissionOverwrites.edit(targetMember, { Connect: false });
                 if (targetMember.voice && targetMember.voice.channelId === channel.id) {
                     await targetMember.voice.disconnect();
                 }
                 await sendBlogLog(interaction.guild, 'CẤM', `${interaction.user} cấm ${targetMember}`);
-                await interaction.reply({ content: `🚫 Đã cấm thành viên **${targetMember.displayName}** khỏi phòng.`, ephemeral: true });
+                return interaction.reply({ content: `🚫 Đã cấm thành viên **${targetMember.displayName}** khỏi phòng.`, ephemeral: true });
             } else if (interaction.customId === 'modal_kick') {
                 if (targetMember.voice && targetMember.voice.channelId === channel.id) {
                     await targetMember.voice.disconnect();
                     await sendBlogLog(interaction.guild, 'ĐUỔI', `${interaction.user} đá ${targetMember} ra khỏi phòng`);
-                    await interaction.reply({ content: `👞 Đã mời thành viên **${targetMember.displayName}** rời khỏi phòng.`, ephemeral: true });
+                    return interaction.reply({ content: `🩴 Đã mời thành viên **${targetMember.displayName}** rời khỏi phòng.`, ephemeral: true });
                 } else {
-                    await interaction.reply({ content: '❌ Thành viên này hiện không có trong phòng của bạn.', ephemeral: true });
+                    return interaction.reply({ content: '❌ Thành viên này hiện không có trong phòng của bạn.', ephemeral: true });
                 }
             }
         } else if (interaction.customId === 'modal_transfer') {
@@ -590,7 +599,7 @@ client.on('interactionCreate', async (interaction) => {
                 await interaction.message.edit({ embeds: [newEmbed], components: getControlRows(true) });
             } catch (e) {}
 
-            await interaction.reply({ content: `👑 Đã chuyển quyền chủ phòng thành công cho **${targetMember.displayName}**!`, ephemeral: true });
+            return interaction.reply({ content: `👑 Đã chuyển quyền chủ phòng thành công cho **${targetMember.displayName}**!`, ephemeral: true });
         }
     }
 });
