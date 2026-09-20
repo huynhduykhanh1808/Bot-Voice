@@ -5,7 +5,7 @@ const {
     TextInputBuilder, TextInputStyle, PermissionsBitField 
 } = require('discord.js');
 const { Pool } = require('pg');
-const http = require('http');
+const http = http = require('http');
 
 const TOKEN = process.env.DISCORD_TOKEN ? process.env.DISCORD_TOKEN.trim() : '';
 const DATABASE_URL = process.env.DATABASE_URL ? process.env.DATABASE_URL.trim() : '';
@@ -237,7 +237,7 @@ async function createRoom(guild, member, category) {
         rtcRegion: null
     });
 
-    // Cấp toàn quyền quản trị đầy đủ cho chủ phòng
+    // Cấp toàn quyền quản trị cao cấp thủ công (ManageChannels, ManageRoles) cho Chủ phòng ngay từ khi tạo
     await newChannel.permissionOverwrites.edit(member, {
         ViewChannel: true,
         Connect: true,
@@ -251,7 +251,7 @@ async function createRoom(guild, member, category) {
         UseVAD: true
     });
 
-    // Cấu hình quyền mặc định cho @everyone: bật nói chuyện tự do (VAD) nhưng có thể bị khóa/ẩn tùy ý chủ phòng
+    // Ghi đè cấu hình cho @everyone: Cho phép kết nối và nói tự do (VAD) mặc định
     await newChannel.permissionOverwrites.edit(guild.roles.everyone, {
         Speak: true,
         UseVAD: true,
@@ -345,7 +345,7 @@ client.on('interactionCreate', async (interaction) => {
             }
 
             await saveGenerator(interaction.guild.id, category.id, generator.id, blogChannel.id);
-            await interaction.update({ content: `✅ **Khởi tạo hệ thống thành công!**\n- Danh mục: **{category.name}**\n- Kênh tạo phòng: ${generator}\n- Kênh Blog Log: ${blogChannel}`, components: [] });
+            await interaction.update({ content: `✅ **Khởi tạo hệ thống thành công!**\n- Danh mục: **${category.name}**\n- Kênh tạo phòng: ${generator}\n- Kênh Blog Log: ${blogChannel}`, components: [] });
             return;
         }
 
@@ -437,7 +437,7 @@ client.on('interactionCreate', async (interaction) => {
             await sendBlogLog(interaction.guild, 'MỞ KHÓA', `${interaction.user} đã mở khóa phòng`);
             return interaction.deferUpdate();
         }
-        // Nút Ẩn phòng: Sử dụng quyền quản trị tối cao của bot để ép ẩn hoàn toàn với @everyone
+        // Nút Ẩn phòng: Thực hiện ghi đè quyền ViewChannel = false thẳng vào @everyone hệt như bạn chỉnh thủ công bằng tay
         else if (customId === 'vc_hide') {
             await channel.permissionOverwrites.edit(interaction.guild.roles.everyone, { ViewChannel: false });
             await channel.permissionOverwrites.edit(interaction.user, { 
@@ -455,7 +455,7 @@ client.on('interactionCreate', async (interaction) => {
             await sendBlogLog(interaction.guild, 'ẨN', `${interaction.user} đã ẩn phòng`);
             return interaction.deferUpdate();
         }
-        // Nút Hiện phòng: Khôi phục hiển thị cho @everyone
+        // Nút Hiện phòng: Khôi phục trạng thái ViewChannel = null (mặc định) cho @everyone
         else if (customId === 'vc_unhide') {
             await channel.permissionOverwrites.edit(interaction.guild.roles.everyone, { ViewChannel: null });
             await sendBlogLog(interaction.guild, 'HIỆN', `${interaction.user} đã hiển thị lại phòng`);
@@ -584,7 +584,7 @@ client.on('interactionCreate', async (interaction) => {
             }
             await channel.setUserLimit(limitVal);
             await sendBlogLog(interaction.guild, 'GIỚI HẠN', `${interaction.user} đặt giới hạn phòng thành ${limitVal}`);
-            return interaction.reply({ content: `✅ Đã cập nhật giới hạn phòng thành **{limitVal}** người.`, ephemeral: true });
+            return interaction.reply({ content: `✅ Đã cập nhật giới hạn phòng thành **${limitVal}** người.`, ephemeral: true });
         } else if (['modal_allow', 'modal_deny', 'modal_kick'].includes(interaction.customId)) {
             const uidStr = interaction.fields.getTextInputValue('input_uid').trim();
             const uid = parseInt(uidStr);
