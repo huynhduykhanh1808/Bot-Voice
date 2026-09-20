@@ -216,7 +216,7 @@ async function sendBlogLog(guild, tag, content) {
 }
 
 // ============================================================
-// CONTROL BUTTONS (Gộp icon trực quan)
+// CONTROL BUTTONS
 // ============================================================
 
 function getControlRows(isOwner, isLocked = false, isHidden = false) {
@@ -411,7 +411,7 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
 });
 
 // ============================================================
-// CREATE ROOM (Cấp quyền tự do, không ép bấm để nói)
+// CREATE ROOM (Cấp quyền đầy đủ, nói chuyện tự do)
 // ============================================================
 
 async function createRoom(guild, member, category) {
@@ -1137,7 +1137,7 @@ client.on('interactionCreate', async (interaction) => {
         return;
     }
 
-    // 4. MODAL SUBMITS (Đã fix lỗi cache fetch thành viên)
+    // 4. MODAL SUBMITS (Đã sửa lỗi định dạng ID và cơ chế fetch tối ưu)
     if (interaction.isModalSubmit()) {
         const channel = interaction.member?.voice?.channel;
         if (!channel) {
@@ -1210,25 +1210,27 @@ client.on('interactionCreate', async (interaction) => {
         ) {
             const uidStr = interaction.fields
                 .getTextInputValue('input_uid')
+                .replace(/[<@!>]/g, '')
                 .trim();
-            const uid = parseInt(uidStr);
+            const uid = uidStr;
 
-            if (isNaN(uid)) {
+            if (!uid || isNaN(Number(uid))) {
                 return interaction.reply({
-                    content: '❌ ID Discord không hợp lệ. Vui lòng kiểm tra lại.',
+                    content: '❌ ID Discord không hợp lệ. Vui lòng nhập đúng dãy số ID của thành viên.',
                     ephemeral: true
                 });
             }
 
-            let targetMember;
-            try {
-                // Tối ưu hóa fetch trực tiếp qua guild members API hoặc cache
-                targetMember = await interaction.guild.members.fetch(uid).catch(() => null);
-            } catch (err) {}
+            let targetMember = interaction.guild.members.cache.get(uid);
+            if (!targetMember) {
+                try {
+                    targetMember = await interaction.guild.members.fetch(uid);
+                } catch (err) {}
+            }
 
             if (!targetMember) {
                 return interaction.reply({
-                    content: '❌ Không tìm thấy thành viên này trong server (hoặc bot thiếu quyền Intent Gateway).',
+                    content: '❌ Không tìm thấy thành viên này trong server. Hãy chắc chắn bạn đã nhập đúng ID.',
                     ephemeral: true
                 });
             }
@@ -1253,11 +1255,10 @@ client.on('interactionCreate', async (interaction) => {
                 await channel.permissionOverwrites.edit(targetMember, {
                     Connect: false
                 });
-                if (
-                    targetMember.voice &&
-                    targetMember.voice.channelId === channel.id
-                ) {
-                    await targetMember.voice.disconnect();
+                if (targetMember.voice) {
+                    try {
+                        await targetMember.voice.disconnect();
+                    } catch (e) {}
                 }
                 await sendBlogLog(
                     interaction.guild,
@@ -1271,11 +1272,12 @@ client.on('interactionCreate', async (interaction) => {
             }
 
             if (interaction.customId === 'modal_kick') {
-                if (
-                    targetMember.voice &&
-                    targetMember.voice.channelId === channel.id
-                ) {
-                    await targetMember.voice.disconnect();
+                try {
+                    if (targetMember.voice && targetMember.voice.channelId === channel.id) {
+                        await targetMember.voice.disconnect();
+                    } else {
+                        await targetMember.voice.setChannel(null);
+                    }
                     await sendBlogLog(
                         interaction.guild,
                         'ĐUỔI',
@@ -1285,36 +1287,42 @@ client.on('interactionCreate', async (interaction) => {
                         content: `🩴 Đã mời thành viên **${targetMember.displayName}** rời khỏi phòng.`,
                         ephemeral: true
                     });
+                } catch (e) {
+                    return interaction.reply({
+                        content: '❌ Thành viên này hiện không có trong phòng thoại của bạn.',
+                        ephemeral: true
+                    });
                 }
-                return interaction.reply({
-                    content: '❌ Thành viên này hiện không có trong phòng thoại của bạn.',
-                    ephemeral: true
-                });
             }
         }
 
         if (interaction.customId === 'modal_transfer') {
             const uidStr = interaction.fields
                 .getTextInputValue('input_uid')
+                .replace(/[<@!>]/g, '')
                 .trim();
-            const uid = parseInt(uidStr);
+            const uid = uidStr;
 
-            if (isNaN(uid)) {
+            if (!uid || isNaN(Number(uid))) {
                 return interaction.reply({
                     content: '❌ ID Discord không hợp lệ.',
                     ephemeral: true
                 });
             }
 
-            const targetMember = await interaction.guild.members
-                .fetch(uid)
-                .catch(() => null);
+            let targetMember = interaction.guild.members.cache.get(uid);
+            if (!targetMember) {
+                targetMember = await interaction.guild.members.fetch(uid).catch(() => null);
+            }
 
-            if (
-                !targetMember ||
-                !targetMember.voice ||
-                targetMember.voice.channelId !== channel.id
-            ) {
+            if (!targetMember) {
+                return interaction.reply({
+                    content: '❌ Không tìm thấy thành viên này trong server.',
+                    ephemeral: true
+                });
+            }
+
+            if (!targetMember.voice || targetMember.voice.channelId !== channel.id) {
                 return interaction.reply({
                     content: '❌ Người nhận quyền phải đang có mặt trực tiếp trong phòng thoại với bạn.',
                     ephemeral: true
