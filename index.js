@@ -243,7 +243,10 @@ async function createRoom(guild, member, category) {
         ManageChannels: true,
         MuteMembers: true,
         DeafenMembers: true,
-        MoveMembers: true
+        MoveMembers: true,
+        Stream: true,
+        Speak: true,
+        UseVAD: true
     });
 
     await member.voice.setChannel(newChannel);
@@ -377,7 +380,10 @@ client.on('interactionCreate', async (interaction) => {
                 ManageChannels: true,
                 MuteMembers: true,
                 DeafenMembers: true,
-                MoveMembers: true
+                MoveMembers: true,
+                Stream: true,
+                Speak: true,
+                UseVAD: true
             });
 
             await sendBlogLog(interaction.guild, 'NHẬN CHỦ', `${interaction.user} tiếp quản phòng ${channel}`);
@@ -411,33 +417,39 @@ client.on('interactionCreate', async (interaction) => {
             return interaction.reply({ content: '❌ Chỉ chủ phòng mới có quyền thực hiện các thao tác quản lý này.', ephemeral: true });
         }
 
-        // Nút Khóa phòng (Ẩn thông báo chung, chỉ hiện ephemeral ngắn gọn)
+        // Chạy ngầm hoàn toàn các thao tác, không gửi thông báo rườm rà lên khung chat
         if (customId === 'vc_lock') {
             await channel.permissionOverwrites.edit(interaction.guild.roles.everyone, { Connect: false });
             await channel.permissionOverwrites.edit(interaction.user, { Connect: true });
             await sendBlogLog(interaction.guild, 'KHÓA', `${interaction.user} đã khóa phòng`);
-            return interaction.reply({ content: '🔒 Đã khóa phòng thành công.', ephemeral: true });
+            return interaction.deferUpdate();
         }
-        // Nút Mở phòng
         else if (customId === 'vc_unlock') {
             await channel.permissionOverwrites.edit(interaction.guild.roles.everyone, { Connect: null });
             await sendBlogLog(interaction.guild, 'MỞ KHÓA', `${interaction.user} đã mở khóa phòng`);
-            return interaction.reply({ content: '🔓 Đã mở khóa phòng thành công.', ephemeral: true });
+            return interaction.deferUpdate();
         }
-        // Nút Ẩn phòng: Chặn hoàn toàn ViewChannel đối với @everyone, cấp riêng quyền cho chủ phòng
+        // Nút Ẩn phòng: Tắt hoàn toàn quyền xem của @everyone và cấp toàn quyền độc quyền cho chủ phòng
         else if (customId === 'vc_hide') {
             await channel.permissionOverwrites.edit(interaction.guild.roles.everyone, { ViewChannel: false });
-            await channel.permissionOverwrites.edit(interaction.user, { ViewChannel: true, Connect: true, ManageChannels: true });
+            await channel.permissionOverwrites.edit(interaction.user, { 
+                ViewChannel: true, 
+                Connect: true, 
+                ManageChannels: true,
+                MuteMembers: true,
+                DeafenMembers: true,
+                MoveMembers: true
+            });
             await sendBlogLog(interaction.guild, 'ẨN', `${interaction.user} đã ẩn phòng`);
-            return interaction.reply({ content: '🥷 Đã ẩn phòng thành công. Thành viên thông thường không thể nhìn thấy.', ephemeral: true });
+            return interaction.deferUpdate();
         }
         // Nút Hiện phòng: Trả lại trạng thái mặc định cho @everyone
         else if (customId === 'vc_unhide') {
             await channel.permissionOverwrites.edit(interaction.guild.roles.everyone, { ViewChannel: null });
             await sendBlogLog(interaction.guild, 'HIỆN', `${interaction.user} đã hiển thị lại phòng`);
-            return interaction.reply({ content: '👁️ Đã hiện phòng thành công.', ephemeral: true });
+            return interaction.deferUpdate();
         }
-        // Nút Chọn khu vực hiển thị bảng rộng rãi ở giữa màn hình với full danh sách
+        // Nút Chọn khu vực hiển thị bảng menu ở giữa màn hình với full danh sách
         else if (customId === 'vc_region') {
             const selectMenu = new StringSelectMenuBuilder()
                 .setCustomId('region_select_menu')
@@ -613,7 +625,10 @@ client.on('interactionCreate', async (interaction) => {
                 ManageChannels: true,
                 MuteMembers: true,
                 DeafenMembers: true,
-                MoveMembers: true
+                MoveMembers: true,
+                Stream: true,
+                Speak: true,
+                UseVAD: true
             });
 
             await sendBlogLog(interaction.guild, 'CHUYỂN CHỦ', `Phòng ${channel} chuyển quyền cho ${targetMember}`);
