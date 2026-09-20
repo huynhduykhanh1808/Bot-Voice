@@ -127,7 +127,7 @@ async function sendBlogLog(guild, tag, content) {
     }
 }
 
-// Giao diện bảng điều khiển gọn gàng, nút đuổi dùng icon dép lào (🩴)
+// Bảng điều khiển nút bấm chuyên nghiệp, nút đuổi dùng icon dép lào (🩴)
 function getControlRows(isOwner) {
     if (isOwner) {
         const row1 = new ActionRowBuilder().addComponents(
@@ -230,7 +230,6 @@ async function createRoom(guild, member, category) {
         await deleteRoomRecord(existing.channel_id);
     }
 
-    // Tạo kênh thoại mới
     const newChannel = await guild.channels.create({
         name: `${ROOM_PREFIX} Phòng của ${member.displayName}`,
         type: 2,
@@ -252,7 +251,7 @@ async function createRoom(guild, member, category) {
         UseVAD: true
     });
 
-    // Thiết lập quyền mặc định cho @everyone: tắt các quyền không cần thiết, bật quyền nói chuyện tự do (VAD)
+    // Cấu hình quyền mặc định cho @everyone: bật nói chuyện tự do (VAD) nhưng có thể bị khóa/ẩn tùy ý chủ phòng
     await newChannel.permissionOverwrites.edit(guild.roles.everyone, {
         Speak: true,
         UseVAD: true,
@@ -264,7 +263,6 @@ async function createRoom(guild, member, category) {
     await saveRoom(guild.id, newChannel.id, member.id, category ? category.id : 0);
     await sendBlogLog(guild, 'TẠO PHÒNG', `Chủ: ${member} ➔${newChannel}`);
 
-    // Nội quy và hướng dẫn văn minh lịch sự, không chứa nội dung hướng dẫn bấm bánh răng
     const embed = new EmbedBuilder()
         .setTitle('🛡️ TRUNG TÂM QUẢN LÝ PHÒNG THOẠI')
         .setDescription(`👑 **Chủ phòng:** ${member}\n\n📜 **NỘI QUY & GIAO LƯU VĂN MINH:**\n• Trò chuyện văn minh, lịch sự và tôn trọng lẫn nhau.\n• Tuyệt đối không có hành vi xúc phạm, đả kích hay dùng từ ngữ kém văn hóa.\n• Cùng nhau xây dựng không gian giao lưu vui vẻ, lành mạnh và tràn ngập những giá trị tích cực! ✨`)
@@ -347,11 +345,10 @@ client.on('interactionCreate', async (interaction) => {
             }
 
             await saveGenerator(interaction.guild.id, category.id, generator.id, blogChannel.id);
-            await interaction.update({ content: `✅ **Khởi tạo hệ thống thành công!**\n- Danh mục: **${category.name}**\n- Kênh tạo phòng: ${generator}\n- Kênh Blog Log: ${blogChannel}`, components: [] });
+            await interaction.update({ content: `✅ **Khởi tạo hệ thống thành công!**\n- Danh mục: **{category.name}**\n- Kênh tạo phòng: ${generator}\n- Kênh Blog Log: ${blogChannel}`, components: [] });
             return;
         }
 
-        // Xử lý chọn khu vực với bảng menu rộng rãi ở giữa màn hình
         if (interaction.customId === 'region_select_menu') {
             const channel = interaction.member?.voice?.channel;
             if (!channel) return interaction.reply({ content: '❌ Bạn cần ở trong phòng thoại để đổi khu vực.', ephemeral: true });
@@ -385,7 +382,6 @@ client.on('interactionCreate', async (interaction) => {
             }
             await saveRoom(interaction.guild.id, channel.id, interaction.user.id, channel.parentId || 0);
             
-            // Cấp toàn quyền quản lý đầy đủ cho chủ mới
             await channel.permissionOverwrites.edit(interaction.user, {
                 ViewChannel: true,
                 Connect: true,
@@ -430,7 +426,6 @@ client.on('interactionCreate', async (interaction) => {
             return interaction.reply({ content: '❌ Chỉ chủ phòng mới có quyền thực hiện các thao tác quản lý này.', ephemeral: true });
         }
 
-        // Chạy ngầm hoàn toàn, giữ sạch khung chat tuyệt đối
         if (customId === 'vc_lock') {
             await channel.permissionOverwrites.edit(interaction.guild.roles.everyone, { Connect: false });
             await channel.permissionOverwrites.edit(interaction.user, { Connect: true });
@@ -442,7 +437,7 @@ client.on('interactionCreate', async (interaction) => {
             await sendBlogLog(interaction.guild, 'MỞ KHÓA', `${interaction.user} đã mở khóa phòng`);
             return interaction.deferUpdate();
         }
-        // Nút Ẩn phòng: Tắt hoàn toàn quyền xem của @everyone và cấp toàn quyền tuyệt đối cho chủ phòng
+        // Nút Ẩn phòng: Sử dụng quyền quản trị tối cao của bot để ép ẩn hoàn toàn với @everyone
         else if (customId === 'vc_hide') {
             await channel.permissionOverwrites.edit(interaction.guild.roles.everyone, { ViewChannel: false });
             await channel.permissionOverwrites.edit(interaction.user, { 
@@ -460,13 +455,12 @@ client.on('interactionCreate', async (interaction) => {
             await sendBlogLog(interaction.guild, 'ẨN', `${interaction.user} đã ẩn phòng`);
             return interaction.deferUpdate();
         }
-        // Nút Hiện phòng: Trả lại trạng thái mặc định cho @everyone
+        // Nút Hiện phòng: Khôi phục hiển thị cho @everyone
         else if (customId === 'vc_unhide') {
             await channel.permissionOverwrites.edit(interaction.guild.roles.everyone, { ViewChannel: null });
             await sendBlogLog(interaction.guild, 'HIỆN', `${interaction.user} đã hiển thị lại phòng`);
             return interaction.deferUpdate();
         }
-        // Nút Chọn khu vực mở menu chọn ở giữa màn hình
         else if (customId === 'vc_region') {
             const selectMenu = new StringSelectMenuBuilder()
                 .setCustomId('region_select_menu')
@@ -590,7 +584,7 @@ client.on('interactionCreate', async (interaction) => {
             }
             await channel.setUserLimit(limitVal);
             await sendBlogLog(interaction.guild, 'GIỚI HẠN', `${interaction.user} đặt giới hạn phòng thành ${limitVal}`);
-            return interaction.reply({ content: `✅ Đã cập nhật giới hạn phòng thành **${limitVal}** người.`, ephemeral: true });
+            return interaction.reply({ content: `✅ Đã cập nhật giới hạn phòng thành **{limitVal}** người.`, ephemeral: true });
         } else if (['modal_allow', 'modal_deny', 'modal_kick'].includes(interaction.customId)) {
             const uidStr = interaction.fields.getTextInputValue('input_uid').trim();
             const uid = parseInt(uidStr);
@@ -635,7 +629,6 @@ client.on('interactionCreate', async (interaction) => {
 
             await saveRoom(interaction.guild.id, channel.id, targetMember.id, channel.parentId || 0);
             
-            // Cấp toàn quyền quản lý đầy đủ cho chủ mới
             await channel.permissionOverwrites.edit(targetMember, {
                 ViewChannel: true,
                 Connect: true,
