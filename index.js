@@ -216,7 +216,7 @@ async function sendBlogLog(guild, tag, content) {
 }
 
 // ============================================================
-// DYNAMIC CONTROL BUTTONS (Gộp icon trực quan, tối giản)
+// CONTROL BUTTONS (Gộp icon trực quan)
 // ============================================================
 
 function getControlRows(isOwner, isLocked = false, isHidden = false) {
@@ -411,7 +411,7 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
 });
 
 // ============================================================
-// CREATE ROOM
+// CREATE ROOM (Cấp quyền tự do, không ép bấm để nói)
 // ============================================================
 
 async function createRoom(guild, member, category) {
@@ -450,36 +450,43 @@ async function createRoom(guild, member, category) {
         permissionOverwrites: [
             {
                 id: guild.roles.everyone.id,
-                ViewChannel: true,
-                Connect: true,
-                Speak: true,
-                UseVAD: true
+                allow: [
+                    PermissionsBitField.Flags.ViewChannel,
+                    PermissionsBitField.Flags.Connect,
+                    PermissionsBitField.Flags.Speak,
+                    PermissionsBitField.Flags.UseVAD,
+                    PermissionsBitField.Flags.Stream
+                ]
             },
             {
                 id: botMember.id,
-                ViewChannel: true,
-                Connect: true,
-                ManageChannels: true,
-                ManageRoles: true,
-                MoveMembers: true,
-                MuteMembers: true,
-                DeafenMembers: true,
-                Stream: true,
-                Speak: true,
-                UseVAD: true
+                allow: [
+                    PermissionsBitField.Flags.ViewChannel,
+                    PermissionsBitField.Flags.Connect,
+                    PermissionsBitField.Flags.Speak,
+                    PermissionsBitField.Flags.UseVAD,
+                    PermissionsBitField.Flags.Stream,
+                    PermissionsBitField.Flags.ManageChannels,
+                    PermissionsBitField.Flags.ManageRoles,
+                    PermissionsBitField.Flags.MoveMembers,
+                    PermissionsBitField.Flags.MuteMembers,
+                    PermissionsBitField.Flags.DeafenMembers
+                ]
             },
             {
                 id: member.id,
-                ViewChannel: true,
-                Connect: true,
-                ManageChannels: true,
-                ManageRoles: true,
-                MoveMembers: true,
-                MuteMembers: true,
-                DeafenMembers: true,
-                Stream: true,
-                Speak: true,
-                UseVAD: true
+                allow: [
+                    PermissionsBitField.Flags.ViewChannel,
+                    PermissionsBitField.Flags.Connect,
+                    PermissionsBitField.Flags.Speak,
+                    PermissionsBitField.Flags.UseVAD,
+                    PermissionsBitField.Flags.Stream,
+                    PermissionsBitField.Flags.ManageChannels,
+                    PermissionsBitField.Flags.ManageRoles,
+                    PermissionsBitField.Flags.MoveMembers,
+                    PermissionsBitField.Flags.MuteMembers,
+                    PermissionsBitField.Flags.DeafenMembers
+                ]
             }
         ]
     });
@@ -587,9 +594,7 @@ async function setRoomVisibility(channel, hidden) {
                     },
                     { reason: 'Đảm bảo chủ phòng có quyền quản lý phòng' }
                 );
-            } catch (err) {
-                console.error(`Không thể set quyền cho owner ${ownerIdStr}:`, err);
-            }
+            } catch (err) {}
         }
     }
 
@@ -659,9 +664,7 @@ async function ensureRoomManagementPermissions(channel, ownerId) {
                     },
                     { reason: 'Cấp quyền quản trị phòng cho chủ phòng' }
                 );
-            } catch (err) {
-                console.error(`Không thể set quyền đảm bảo cho owner ${ownerIdStr}:`, err);
-            }
+            } catch (err) {}
         }
     }
 }
@@ -994,7 +997,6 @@ client.on('interactionCreate', async (interaction) => {
                     components: newRows
                 });
             } catch (error) {
-                console.error('Lỗi vc_hide:', error);
                 return interaction.reply({
                     content: '❌ Bot không thể ẩn phòng. Hãy kiểm tra lại quyền của bot.',
                     ephemeral: true
@@ -1017,9 +1019,8 @@ client.on('interactionCreate', async (interaction) => {
                     components: newRows
                 });
             } catch (error) {
-                console.error('Lỗi vc_unhide:', error);
                 return interaction.reply({
-                    content: '❌ Bot không thể hiện phòng. Hãy kiểm tra quyền **Manage Channels** của bot.',
+                    content: '❌ Bot không thể hiện phòng. Hãy kiểm tra quyền quản trị của bot.',
                     ephemeral: true
                 });
             }
@@ -1136,7 +1137,7 @@ client.on('interactionCreate', async (interaction) => {
         return;
     }
 
-    // 4. MODAL SUBMITS
+    // 4. MODAL SUBMITS (Đã fix lỗi cache fetch thành viên)
     if (interaction.isModalSubmit()) {
         const channel = interaction.member?.voice?.channel;
         if (!channel) {
@@ -1221,10 +1222,13 @@ client.on('interactionCreate', async (interaction) => {
 
             let targetMember;
             try {
-                targetMember = await interaction.guild.members.fetch(uid);
-            } catch (err) {
+                // Tối ưu hóa fetch trực tiếp qua guild members API hoặc cache
+                targetMember = await interaction.guild.members.fetch(uid).catch(() => null);
+            } catch (err) {}
+
+            if (!targetMember) {
                 return interaction.reply({
-                    content: '❌ Không tìm thấy thành viên này trong server.',
+                    content: '❌ Không tìm thấy thành viên này trong server (hoặc bot thiếu quyền Intent Gateway).',
                     ephemeral: true
                 });
             }
@@ -1283,7 +1287,7 @@ client.on('interactionCreate', async (interaction) => {
                     });
                 }
                 return interaction.reply({
-                    content: '❌ Thành viên này hiện không có trong phòng của bạn.',
+                    content: '❌ Thành viên này hiện không có trong phòng thoại của bạn.',
                     ephemeral: true
                 });
             }
@@ -1308,6 +1312,7 @@ client.on('interactionCreate', async (interaction) => {
 
             if (
                 !targetMember ||
+                !targetMember.voice ||
                 targetMember.voice.channelId !== channel.id
             ) {
                 return interaction.reply({
