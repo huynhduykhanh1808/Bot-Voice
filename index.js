@@ -221,16 +221,13 @@ async function sendBlogLog(guild, tag, content) {
 
 function getControlRows(isOwner, isLocked = false, isHidden = false) {
     if (isOwner) {
-        // Hàng 1: Các nút trạng thái (Khóa/Mở, Ẩn/Hiện kết hợp thông minh)
         const row1 = new ActionRowBuilder().addComponents(
-            // Nút Khóa / Mở phòng gộp chung
             new ButtonBuilder()
                 .setCustomId(isLocked ? 'vc_unlock' : 'vc_lock')
                 .setLabel(isLocked ? 'Mở khóa phòng' : 'Khóa phòng')
                 .setStyle(isLocked ? ButtonStyle.Success : ButtonStyle.Secondary)
                 .setEmoji(isLocked ? '🔓' : '🔒'),
 
-            // Nút Ẩn / Hiện phòng gộp chung
             new ButtonBuilder()
                 .setCustomId(isHidden ? 'vc_unhide' : 'vc_hide')
                 .setLabel(isHidden ? 'Hiện phòng' : 'Ẩn phòng')
@@ -238,7 +235,6 @@ function getControlRows(isOwner, isLocked = false, isHidden = false) {
                 .setEmoji(isHidden ? '👁️' : '🥷')
         );
 
-        // Hàng 2: Tùy chỉnh phòng
         const row2 = new ActionRowBuilder().addComponents(
             new ButtonBuilder()
                 .setCustomId('vc_rename')
@@ -259,7 +255,6 @@ function getControlRows(isOwner, isLocked = false, isHidden = false) {
                 .setEmoji('🌐')
         );
 
-        // Hàng 3: Quản lý thành viên & Chủ phòng
         const row3 = new ActionRowBuilder().addComponents(
             new ButtonBuilder()
                 .setCustomId('vc_allow')
@@ -289,7 +284,6 @@ function getControlRows(isOwner, isLocked = false, isHidden = false) {
         return [row1, row2, row3];
     }
 
-    // Dành cho thành viên thường
     const row = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
             .setCustomId('vc_claim')
@@ -307,18 +301,14 @@ function getControlRows(isOwner, isLocked = false, isHidden = false) {
     return [row];
 }
 
-// Hàm hỗ trợ kiểm tra trạng thái phòng để render đúng nút
 async function getDynamicControlRows(channel, userId) {
     const room = await getRoom(channel.id);
-    const isOwner = room && room.owner_id.toString() === userId.toString();
+    const isOwner = room && room.owner_id && room.owner_id.toString() === userId.toString();
     
     if (!isOwner) return getControlRows(false);
 
-    // Kiểm tra trạng thái khóa của @everyone
     const everyoneOverwrite = channel.permissionOverwrites.cache.get(channel.guild.roles.everyone.id);
     const isLocked = everyoneOverwrite?.deny.has(PermissionsBitField.Flags.Connect) || false;
-
-    // Kiểm tra trạng thái ẩn của @everyone
     const isHidden = everyoneOverwrite?.deny.has(PermissionsBitField.Flags.ViewChannel) || false;
 
     return getControlRows(true, isLocked, isHidden);
@@ -331,21 +321,6 @@ async function getDynamicControlRows(channel, userId) {
 client.once('ready', async () => {
     await initDb();
     client.user.setActivity('Quản lý phòng thoại chuyên nghiệp');
-
-    for (const guild of client.guilds.cache.values()) {
-        const me = guild.members.me;
-        if (me) {
-            console.log(
-                `[PERMISSION] ${guild.name} | ` +
-                `Administrator=${me.permissions.has(
-                    PermissionsBitField.Flags.Administrator
-                )} | ` +
-                `ManageChannels=${me.permissions.has(
-                    PermissionsBitField.Flags.ManageChannels
-                )}`
-            );
-        }
-    }
 
     console.log(`Đăng nhập thành công bot: ${client.user.tag}`);
 
@@ -571,7 +546,7 @@ client.on('messageCreate', async (message) => {
 });
 
 // ============================================================
-// ROOM VISIBILITY & PERMISSIONS
+// ROOM VISIBILITY & PERMISSIONS (Đã vá lỗi an toàn tuyệt đối)
 // ============================================================
 
 async function setRoomVisibility(channel, hidden) {
@@ -593,22 +568,30 @@ async function setRoomVisibility(channel, hidden) {
         { reason: hidden ? 'Ẩn phòng bằng bot' : 'Hiện phòng bằng bot' }
     );
 
+    // Kiểm tra an toàn giá trị owner_id trước khi ép kiểu
     if (room && room.owner_id) {
-        await channel.permissionOverwrites.edit(
-            String(room.owner_id),
-            {
-                ViewChannel: true,
-                Connect: true,
-                Speak: true,
-                UseVAD: true,
-                ManageChannels: true,
-                ManageRoles: true,
-                MoveMembers: true,
-                MuteMembers: true,
-                DeafenMembers: true
-            },
-            { reason: 'Đảm bảo chủ phòng có quyền quản lý phòng' }
-        );
+        const ownerIdStr = String(room.owner_id).trim();
+        if (ownerIdStr && ownerIdStr !== '0') {
+            try {
+                await channel.permissionOverwrites.edit(
+                    ownerIdStr,
+                    {
+                        ViewChannel: true,
+                        Connect: true,
+                        Speak: true,
+                        UseVAD: true,
+                        ManageChannels: true,
+                        ManageRoles: true,
+                        MoveMembers: true,
+                        MuteMembers: true,
+                        DeafenMembers: true
+                    },
+                    { reason: 'Đảm bảo chủ phòng có quyền quản lý phòng' }
+                );
+            } catch (err) {
+                console.error(`Không thể set quyền cho owner ${ownerIdStr}:`, err);
+            }
+        }
     }
 
     await channel.permissionOverwrites.edit(
@@ -659,19 +642,26 @@ async function ensureRoomManagementPermissions(channel, ownerId) {
     );
 
     if (ownerId) {
-        await channel.permissionOverwrites.edit(
-            String(ownerId),
-            {
-                ViewChannel: true,
-                Connect: true,
-                ManageChannels: true,
-                ManageRoles: true,
-                MoveMembers: true,
-                MuteMembers: true,
-                DeafenMembers: true
-            },
-            { reason: 'Cấp quyền quản trị phòng cho chủ phòng' }
-        );
+        const ownerIdStr = String(ownerId).trim();
+        if (ownerIdStr && ownerIdStr !== '0') {
+            try {
+                await channel.permissionOverwrites.edit(
+                    ownerIdStr,
+                    {
+                        ViewChannel: true,
+                        Connect: true,
+                        ManageChannels: true,
+                        ManageRoles: true,
+                        MoveMembers: true,
+                        MuteMembers: true,
+                        DeafenMembers: true
+                    },
+                    { reason: 'Cấp quyền quản trị phòng cho chủ phòng' }
+                );
+            } catch (err) {
+                console.error(`Không thể set quyền đảm bảo cho owner ${ownerIdStr}:`, err);
+            }
+        }
     }
 }
 
@@ -681,10 +671,6 @@ async function ensureRoomManagementPermissions(channel, ownerId) {
 
 client.on('interactionCreate', async (interaction) => {
     if (!interaction.guild) return;
-
-    // ====================================================
-    // SLASH COMMAND
-    // ====================================================
 
     if (interaction.isChatInputCommand()) {
         if (interaction.commandName === 'setup') {
@@ -759,10 +745,6 @@ client.on('interactionCreate', async (interaction) => {
         return;
     }
 
-    // ====================================================
-    // STRING SELECT MENU
-    // ====================================================
-
     if (interaction.isStringSelectMenu()) {
         if (interaction.customId === 'setup_category_select') {
             const catId = interaction.values[0];
@@ -828,6 +810,7 @@ client.on('interactionCreate', async (interaction) => {
             const room = await getRoom(channel.id);
             if (
                 !room ||
+                !room.owner_id ||
                 room.owner_id.toString() !== interaction.user.id
             ) {
                 return interaction.reply({
@@ -853,10 +836,6 @@ client.on('interactionCreate', async (interaction) => {
         }
     }
 
-    // ====================================================
-    // BUTTONS
-    // ====================================================
-
     if (interaction.isButton()) {
         const channel = interaction.member?.voice?.channel;
         if (!channel) {
@@ -868,7 +847,7 @@ client.on('interactionCreate', async (interaction) => {
 
         const room = await getRoom(channel.id);
         const isOwner =
-            room && room.owner_id.toString() === interaction.user.id;
+            room && room.owner_id && room.owner_id.toString() === interaction.user.id;
         const customId = interaction.customId;
 
         if (customId === 'vc_claim') {
@@ -938,7 +917,7 @@ client.on('interactionCreate', async (interaction) => {
 
         if (customId === 'vc_info') {
             let ownerName = 'Không xác định';
-            if (room) {
+            if (room && room.owner_id) {
                 const ownerObj = interaction.guild.members.cache.get(
                     room.owner_id.toString()
                 );
@@ -962,7 +941,6 @@ client.on('interactionCreate', async (interaction) => {
             });
         }
 
-        // Xử lý nút Khóa phòng
         if (customId === 'vc_lock') {
             await channel.permissionOverwrites.edit(
                 interaction.guild.roles.everyone,
@@ -979,7 +957,6 @@ client.on('interactionCreate', async (interaction) => {
             return interaction.update({ components: newRows });
         }
 
-        // Xử lý nút Mở khóa phòng
         if (customId === 'vc_unlock') {
             await channel.permissionOverwrites.edit(
                 interaction.guild.roles.everyone,
@@ -996,7 +973,6 @@ client.on('interactionCreate', async (interaction) => {
             return interaction.update({ components: newRows });
         }
 
-        // Xử lý nút Ẩn phòng
         if (customId === 'vc_hide') {
             try {
                 await setRoomVisibility(channel, true);
@@ -1020,7 +996,6 @@ client.on('interactionCreate', async (interaction) => {
             }
         }
 
-        // Xử lý nút Hiện phòng
         if (customId === 'vc_unhide') {
             try {
                 await setRoomVisibility(channel, false);
@@ -1155,10 +1130,6 @@ client.on('interactionCreate', async (interaction) => {
         return;
     }
 
-    // ====================================================
-    // MODAL SUBMIT
-    // ====================================================
-
     if (interaction.isModalSubmit()) {
         const channel = interaction.member?.voice?.channel;
         if (!channel) {
@@ -1171,6 +1142,7 @@ client.on('interactionCreate', async (interaction) => {
         const room = await getRoom(channel.id);
         if (
             !room ||
+            !room.owner_id ||
             room.owner_id.toString() !== interaction.user.id
         ) {
             return interaction.reply({
