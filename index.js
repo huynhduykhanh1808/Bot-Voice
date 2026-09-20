@@ -230,7 +230,7 @@ async function createRoom(guild, member, category) {
         await deleteRoomRecord(existing.channel_id);
     }
 
-    // Tạo kênh thoại ở chế độ trò chuyện bình thường (VAD / Speak tự do)
+    // Tạo kênh thoại ở chế độ trò chuyện bình thường (VAD tự do)
     const newChannel = await guild.channels.create({
         name: `${ROOM_PREFIX} Phòng của ${member.displayName}`,
         type: 2,
@@ -238,11 +238,12 @@ async function createRoom(guild, member, category) {
         rtcRegion: null
     });
 
-    // Cấp toàn quyền tuyệt đối cho chủ phòng ngay khi tạo
+    // Cấp FULL QUYỀN QUẢN TRỊ THỦ CÔNG cho chủ phòng (bao gồm ManageChannels để hiện nút bánh răng chỉnh sửa thủ công)
     await newChannel.permissionOverwrites.edit(member, {
         ViewChannel: true,
         Connect: true,
-        ManageChannels: true,
+        ManageChannels: true,       // Cho phép bấm bánh răng chỉnh sửa kênh thủ công
+        ManageRoles: true,          // Cho phép chỉnh phân quyền
         MuteMembers: true,
         DeafenMembers: true,
         MoveMembers: true,
@@ -251,13 +252,21 @@ async function createRoom(guild, member, category) {
         UseVAD: true
     });
 
+    // Cấu hình quyền speak và VAD mặc định cho @everyone để mọi người vào nói chuyện tự do ngay
+    await newChannel.permissionOverwrites.edit(guild.roles.everyone, {
+        Speak: true,
+        UseVAD: true,
+        ViewChannel: true,
+        Connect: true
+    });
+
     await member.voice.setChannel(newChannel);
     await saveRoom(guild.id, newChannel.id, member.id, category ? category.id : 0);
     await sendBlogLog(guild, 'TẠO PHÒNG', `Chủ: ${member} ➔${newChannel}`);
 
     const embed = new EmbedBuilder()
         .setTitle('🛡️ TRUNG TÂM QUẢN LÝ PHÒNG THOẠI')
-        .setDescription(`👑 **Chủ phòng:** ${member}\n\n✨ Chào mừng bạn đến với không gian trò chuyện riêng tư. Sử dụng các nút bấm bên dưới để quản lý phòng thoại của bạn một cách nhanh chóng và chính xác.`)
+        .setDescription(`👑 **Chủ phòng:** ${member}\n\n✨ Chào mừng bạn đến với không gian trò chuyện riêng tư. Sử dụng các nút bấm bên dưới hoặc bấm vào **Biểu tượng Bánh răng (Cài đặt)** trên Discord để tùy chỉnh thủ công theo ý muốn!`)
         .setColor(0x1E90FF)
         .setThumbnail(member.user.displayAvatarURL())
         .setFooter({ text: 'Hệ thống quản lý phòng thoại tự động' })
@@ -375,11 +384,12 @@ client.on('interactionCreate', async (interaction) => {
             }
             await saveRoom(interaction.guild.id, channel.id, interaction.user.id, channel.parentId || 0);
             
-            // Cấp toàn quyền cho chủ mới
+            // Cấp full quyền quản trị thủ công cho chủ mới
             await channel.permissionOverwrites.edit(interaction.user, {
                 ViewChannel: true,
                 Connect: true,
                 ManageChannels: true,
+                ManageRoles: true,
                 MuteMembers: true,
                 DeafenMembers: true,
                 MoveMembers: true,
@@ -392,7 +402,7 @@ client.on('interactionCreate', async (interaction) => {
             
             const newEmbed = new EmbedBuilder()
                 .setTitle('🛡️ TRUNG TÂM QUẢN LÝ PHÒNG THOẠI')
-                .setDescription(`👑 **Chủ phòng:** ${interaction.user}\n\n✨ Chào mừng bạn đến với không gian trò chuyện riêng tư. Sử dụng các nút bấm bên dưới để quản lý phòng thoại của bạn một cách nhanh chóng và chính xác.`)
+                .setDescription(`👑 **Chủ phòng:** ${interaction.user}\n\n✨ Chào mừng bạn đến với không gian trò chuyện riêng tư. Sử dụng các nút bấm bên dưới hoặc bấm vào **Biểu tượng Bánh răng (Cài đặt)** trên Discord để tùy chỉnh thủ công theo ý muốn!`)
                 .setColor(0x1E90FF)
                 .setThumbnail(interaction.user.displayAvatarURL())
                 .setFooter({ text: 'Hệ thống quản lý phòng thoại tự động' })
@@ -431,13 +441,14 @@ client.on('interactionCreate', async (interaction) => {
             await sendBlogLog(interaction.guild, 'MỞ KHÓA', `${interaction.user} đã mở khóa phòng`);
             return interaction.deferUpdate();
         }
-        // Nút Ẩn phòng: Tắt hoàn toàn quyền xem của @everyone và cấp toàn quyền tuyệt đối cho chủ phòng
+        // Nút Ẩn phòng: Tắt hoàn toàn quyền xem của @everyone và cấp full quyền quản trị thủ công cho chủ phòng
         else if (customId === 'vc_hide') {
             await channel.permissionOverwrites.edit(interaction.guild.roles.everyone, { ViewChannel: false });
             await channel.permissionOverwrites.edit(interaction.user, { 
                 ViewChannel: true, 
                 Connect: true, 
                 ManageChannels: true,
+                ManageRoles: true,
                 MuteMembers: true,
                 DeafenMembers: true,
                 MoveMembers: true,
@@ -623,11 +634,12 @@ client.on('interactionCreate', async (interaction) => {
 
             await saveRoom(interaction.guild.id, channel.id, targetMember.id, channel.parentId || 0);
             
-            // Cấp toàn quyền cho chủ mới
+            // Cấp full quyền quản trị thủ công cho chủ mới
             await channel.permissionOverwrites.edit(targetMember, {
                 ViewChannel: true,
                 Connect: true,
                 ManageChannels: true,
+                ManageRoles: true,
                 MuteMembers: true,
                 DeafenMembers: true,
                 MoveMembers: true,
@@ -640,7 +652,7 @@ client.on('interactionCreate', async (interaction) => {
             
             const newEmbed = new EmbedBuilder()
                 .setTitle('🛡️ TRUNG TÂM QUẢN LÝ PHÒNG THOẠI')
-                .setDescription(`👑 **Chủ phòng:** ${targetMember}\n\n✨ Chào mừng bạn đến với không gian trò chuyện riêng tư. Sử dụng các nút bấm bên dưới để quản lý phòng thoại của bạn một cách nhanh chóng và chính xác.`)
+                .setDescription(`👑 **Chủ phòng:** ${targetMember}\n\n✨ Chào mừng bạn đến với không gian trò chuyện riêng tư. Sử dụng các nút bấm bên dưới hoặc bấm vào **Biểu tượng Bánh răng (Cài đặt)** trên Discord để tùy chỉnh thủ công theo ý muốn!`)
                 .setColor(0x1E90FF)
                 .setThumbnail(targetMember.user.displayAvatarURL())
                 .setFooter({ text: 'Hệ thống quản lý phòng thoại tự động' })
