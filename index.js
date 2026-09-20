@@ -127,7 +127,7 @@ async function sendBlogLog(guild, tag, content) {
     }
 }
 
-// Bảng điều khiển nút bấm chuyên nghiệp, nút đuổi dùng icon dép lào (🩴)
+// Giao diện bảng điều khiển gọn gàng, nút đuổi dùng icon dép lào (🩴)
 function getControlRows(isOwner) {
     if (isOwner) {
         const row1 = new ActionRowBuilder().addComponents(
@@ -230,7 +230,7 @@ async function createRoom(guild, member, category) {
         await deleteRoomRecord(existing.channel_id);
     }
 
-    // Tạo kênh thoại ở chế độ trò chuyện bình thường (VAD tự do)
+    // Tạo kênh thoại mới
     const newChannel = await guild.channels.create({
         name: `${ROOM_PREFIX} Phòng của ${member.displayName}`,
         type: 2,
@@ -238,12 +238,12 @@ async function createRoom(guild, member, category) {
         rtcRegion: null
     });
 
-    // Cấp FULL QUYỀN QUẢN TRỊ THỦ CÔNG cho chủ phòng (bao gồm ManageChannels để hiện nút bánh răng chỉnh sửa thủ công)
+    // Cấp toàn quyền quản trị đầy đủ cho chủ phòng
     await newChannel.permissionOverwrites.edit(member, {
         ViewChannel: true,
         Connect: true,
-        ManageChannels: true,       // Cho phép bấm bánh răng chỉnh sửa kênh thủ công
-        ManageRoles: true,          // Cho phép chỉnh phân quyền
+        ManageChannels: true,
+        ManageRoles: true,
         MuteMembers: true,
         DeafenMembers: true,
         MoveMembers: true,
@@ -252,7 +252,7 @@ async function createRoom(guild, member, category) {
         UseVAD: true
     });
 
-    // Cấu hình quyền speak và VAD mặc định cho @everyone để mọi người vào nói chuyện tự do ngay
+    // Thiết lập quyền mặc định cho @everyone: tắt các quyền không cần thiết, bật quyền nói chuyện tự do (VAD)
     await newChannel.permissionOverwrites.edit(guild.roles.everyone, {
         Speak: true,
         UseVAD: true,
@@ -264,9 +264,10 @@ async function createRoom(guild, member, category) {
     await saveRoom(guild.id, newChannel.id, member.id, category ? category.id : 0);
     await sendBlogLog(guild, 'TẠO PHÒNG', `Chủ: ${member} ➔${newChannel}`);
 
+    // Nội quy và hướng dẫn văn minh lịch sự, không chứa nội dung hướng dẫn bấm bánh răng
     const embed = new EmbedBuilder()
         .setTitle('🛡️ TRUNG TÂM QUẢN LÝ PHÒNG THOẠI')
-        .setDescription(`👑 **Chủ phòng:** ${member}\n\n✨ Chào mừng bạn đến với không gian trò chuyện riêng tư. Sử dụng các nút bấm bên dưới hoặc bấm vào **Biểu tượng Bánh răng (Cài đặt)** trên Discord để tùy chỉnh thủ công theo ý muốn!`)
+        .setDescription(`👑 **Chủ phòng:** ${member}\n\n📜 **NỘI QUY & GIAO LƯU VĂN MINH:**\n• Trò chuyện văn minh, lịch sự và tôn trọng lẫn nhau.\n• Tuyệt đối không có hành vi xúc phạm, đả kích hay dùng từ ngữ kém văn hóa.\n• Cùng nhau xây dựng không gian giao lưu vui vẻ, lành mạnh và tràn ngập những giá trị tích cực! ✨`)
         .setColor(0x1E90FF)
         .setThumbnail(member.user.displayAvatarURL())
         .setFooter({ text: 'Hệ thống quản lý phòng thoại tự động' })
@@ -384,7 +385,7 @@ client.on('interactionCreate', async (interaction) => {
             }
             await saveRoom(interaction.guild.id, channel.id, interaction.user.id, channel.parentId || 0);
             
-            // Cấp full quyền quản trị thủ công cho chủ mới
+            // Cấp toàn quyền quản lý đầy đủ cho chủ mới
             await channel.permissionOverwrites.edit(interaction.user, {
                 ViewChannel: true,
                 Connect: true,
@@ -402,7 +403,7 @@ client.on('interactionCreate', async (interaction) => {
             
             const newEmbed = new EmbedBuilder()
                 .setTitle('🛡️ TRUNG TÂM QUẢN LÝ PHÒNG THOẠI')
-                .setDescription(`👑 **Chủ phòng:** ${interaction.user}\n\n✨ Chào mừng bạn đến với không gian trò chuyện riêng tư. Sử dụng các nút bấm bên dưới hoặc bấm vào **Biểu tượng Bánh răng (Cài đặt)** trên Discord để tùy chỉnh thủ công theo ý muốn!`)
+                .setDescription(`👑 **Chủ phòng:** ${interaction.user}\n\n📜 **NỘI QUY & GIAO LƯU VĂN MINH:**\n• Trò chuyện văn minh, lịch sự và tôn trọng lẫn nhau.\n• Tuyệt đối không có hành vi xúc phạm, đả kích hay dùng từ ngữ kém văn hóa.\n• Cùng nhau xây dựng không gian giao lưu vui vẻ, lành mạnh và tràn ngập những giá trị tích cực! ✨`)
                 .setColor(0x1E90FF)
                 .setThumbnail(interaction.user.displayAvatarURL())
                 .setFooter({ text: 'Hệ thống quản lý phòng thoại tự động' })
@@ -441,7 +442,7 @@ client.on('interactionCreate', async (interaction) => {
             await sendBlogLog(interaction.guild, 'MỞ KHÓA', `${interaction.user} đã mở khóa phòng`);
             return interaction.deferUpdate();
         }
-        // Nút Ẩn phòng: Tắt hoàn toàn quyền xem của @everyone và cấp full quyền quản trị thủ công cho chủ phòng
+        // Nút Ẩn phòng: Tắt hoàn toàn quyền xem của @everyone và cấp toàn quyền tuyệt đối cho chủ phòng
         else if (customId === 'vc_hide') {
             await channel.permissionOverwrites.edit(interaction.guild.roles.everyone, { ViewChannel: false });
             await channel.permissionOverwrites.edit(interaction.user, { 
@@ -634,7 +635,7 @@ client.on('interactionCreate', async (interaction) => {
 
             await saveRoom(interaction.guild.id, channel.id, targetMember.id, channel.parentId || 0);
             
-            // Cấp full quyền quản trị thủ công cho chủ mới
+            // Cấp toàn quyền quản lý đầy đủ cho chủ mới
             await channel.permissionOverwrites.edit(targetMember, {
                 ViewChannel: true,
                 Connect: true,
@@ -652,7 +653,7 @@ client.on('interactionCreate', async (interaction) => {
             
             const newEmbed = new EmbedBuilder()
                 .setTitle('🛡️ TRUNG TÂM QUẢN LÝ PHÒNG THOẠI')
-                .setDescription(`👑 **Chủ phòng:** ${targetMember}\n\n✨ Chào mừng bạn đến với không gian trò chuyện riêng tư. Sử dụng các nút bấm bên dưới hoặc bấm vào **Biểu tượng Bánh răng (Cài đặt)** trên Discord để tùy chỉnh thủ công theo ý muốn!`)
+                .setDescription(`👑 **Chủ phòng:** ${targetMember}\n\n📜 **NỘI QUY & GIAO LƯU VĂN MINH:**\n• Trò chuyện văn minh, lịch sự và tôn trọng lẫn nhau.\n• Tuyệt đối không có hành vi xúc phạm, đả kích hay dùng từ ngữ kém văn hóa.\n• Cùng nhau xây dựng không gian giao lưu vui vẻ, lành mạnh và tràn ngập những giá trị tích cực! ✨`)
                 .setColor(0x1E90FF)
                 .setThumbnail(targetMember.user.displayAvatarURL())
                 .setFooter({ text: 'Hệ thống quản lý phòng thoại tự động' })
