@@ -990,8 +990,8 @@ client.on('interactionCreate', async (interaction) => {
                     `${interaction.user} đã ẩn phòng ${channel}`
                 );
                 return interaction.update({
-                    content: '🥷 **Đã ẩn phòng. Thành viên không có quyền riêng sẽ không còn thấy phòng.**',
-                    components: []
+                    content: '🥷 **Phòng đã được ẩn.** Thành viên không có quyền riêng sẽ không còn nhìn thấy phòng này.',
+                    components: getControlRows(true)
                 });
             } catch (error) {
                 console.error('Lỗi vc_hide:', error);
@@ -1011,8 +1011,8 @@ client.on('interactionCreate', async (interaction) => {
                     `${interaction.user} đã hiển thị lại phòng ${channel}`
                 );
                 return interaction.update({
-                    content: '👁️ **Đã hiện phòng trở lại cho thành viên.**',
-                    components: []
+                    content: '👁️ **Phòng đã được hiện trở lại** cho tất cả thành viên.',
+                    components: getControlRows(true)
                 });
             } catch (error) {
                 console.error('Lỗi vc_unhide:', error);
