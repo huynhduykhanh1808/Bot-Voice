@@ -216,7 +216,7 @@ async function sendBlogLog(guild, tag, content) {
 }
 
 // ============================================================
-// CONTROL BUTTONS
+// DYNAMIC CONTROL BUTTONS
 // ============================================================
 
 function getControlRows(isOwner, isLocked = false, isHidden = false) {
@@ -411,7 +411,7 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
 });
 
 // ============================================================
-// CREATE ROOM (Cấp quyền đầy đủ, nói chuyện tự do)
+// CREATE ROOM
 // ============================================================
 
 async function createRoom(guild, member, category) {
@@ -454,8 +454,7 @@ async function createRoom(guild, member, category) {
                     PermissionsBitField.Flags.ViewChannel,
                     PermissionsBitField.Flags.Connect,
                     PermissionsBitField.Flags.Speak,
-                    PermissionsBitField.Flags.UseVAD,
-                    PermissionsBitField.Flags.Stream
+                    PermissionsBitField.Flags.UseVAD
                 ]
             },
             {
@@ -463,14 +462,13 @@ async function createRoom(guild, member, category) {
                 allow: [
                     PermissionsBitField.Flags.ViewChannel,
                     PermissionsBitField.Flags.Connect,
-                    PermissionsBitField.Flags.Speak,
-                    PermissionsBitField.Flags.UseVAD,
-                    PermissionsBitField.Flags.Stream,
                     PermissionsBitField.Flags.ManageChannels,
                     PermissionsBitField.Flags.ManageRoles,
                     PermissionsBitField.Flags.MoveMembers,
                     PermissionsBitField.Flags.MuteMembers,
-                    PermissionsBitField.Flags.DeafenMembers
+                    PermissionsBitField.Flags.DeafenMembers,
+                    PermissionsBitField.Flags.Speak,
+                    PermissionsBitField.Flags.UseVAD
                 ]
             },
             {
@@ -478,14 +476,13 @@ async function createRoom(guild, member, category) {
                 allow: [
                     PermissionsBitField.Flags.ViewChannel,
                     PermissionsBitField.Flags.Connect,
-                    PermissionsBitField.Flags.Speak,
-                    PermissionsBitField.Flags.UseVAD,
-                    PermissionsBitField.Flags.Stream,
                     PermissionsBitField.Flags.ManageChannels,
                     PermissionsBitField.Flags.ManageRoles,
                     PermissionsBitField.Flags.MoveMembers,
                     PermissionsBitField.Flags.MuteMembers,
-                    PermissionsBitField.Flags.DeafenMembers
+                    PermissionsBitField.Flags.DeafenMembers,
+                    PermissionsBitField.Flags.Speak,
+                    PermissionsBitField.Flags.UseVAD
                 ]
             }
         ]
@@ -553,7 +550,7 @@ client.on('messageCreate', async (message) => {
 });
 
 // ============================================================
-// ROOM VISIBILITY & PERMISSIONS
+// ROOM VISIBILITY & PERMISSIONS (Đã sửa lỗi ẩn/hiện triệt để)
 // ============================================================
 
 async function setRoomVisibility(channel, hidden) {
@@ -569,12 +566,14 @@ async function setRoomVisibility(channel, hidden) {
         throw new Error('Bot thiếu quyền ManageChannels.');
     }
 
+    // Đổi trực tiếp trạng thái ViewChannel của @everyone
     await channel.permissionOverwrites.edit(
         guild.roles.everyone.id,
-        { ViewChannel: hidden ? false : true },
+        { ViewChannel: !hidden },
         { reason: hidden ? 'Ẩn phòng bằng bot' : 'Hiện phòng bằng bot' }
     );
 
+    // Đảm bảo chủ phòng luôn có toàn quyền nhìn và quản lý
     if (room && room.owner_id) {
         const ownerIdStr = String(room.owner_id).trim();
         if (ownerIdStr && ownerIdStr !== '0') {
@@ -598,6 +597,7 @@ async function setRoomVisibility(channel, hidden) {
         }
     }
 
+    // Đảm bảo bot luôn có quyền quản lý tối cao
     await channel.permissionOverwrites.edit(
         botMember.id,
         {
@@ -621,12 +621,8 @@ async function ensureRoomManagementPermissions(channel, ownerId) {
     const guild = channel.guild;
     const botMember = guild.members.me;
 
-    if (!botMember) {
-        throw new Error('Không tìm thấy bot member.');
-    }
-
-    if (!botMember.permissions.has(PermissionsBitField.Flags.ManageChannels)) {
-        throw new Error('Bot thiếu quyền ManageChannels.');
+    if (!botMember || !botMember.permissions.has(PermissionsBitField.Flags.ManageChannels)) {
+        return;
     }
 
     await channel.permissionOverwrites.edit(
@@ -676,7 +672,6 @@ async function ensureRoomManagementPermissions(channel, ownerId) {
 client.on('interactionCreate', async (interaction) => {
     if (!interaction.guild) return;
 
-    // 1. SLASH COMMANDS
     if (interaction.isChatInputCommand()) {
         if (interaction.commandName === 'setup') {
             const categories = interaction.guild.channels.cache.filter(
@@ -750,7 +745,6 @@ client.on('interactionCreate', async (interaction) => {
         return;
     }
 
-    // 2. STRING SELECT MENUS
     if (interaction.isStringSelectMenu()) {
         if (interaction.customId === 'setup_category_select') {
             const catId = interaction.values[0];
@@ -844,7 +838,6 @@ client.on('interactionCreate', async (interaction) => {
         return;
     }
 
-    // 3. BUTTONS
     if (interaction.isButton()) {
         const channel = interaction.member?.voice?.channel;
         if (!channel) {
@@ -997,8 +990,9 @@ client.on('interactionCreate', async (interaction) => {
                     components: newRows
                 });
             } catch (error) {
+                console.error('Lỗi ẩn phòng:', error);
                 return interaction.reply({
-                    content: '❌ Bot không thể ẩn phòng. Hãy kiểm tra lại quyền của bot.',
+                    content: '❌ Bot không thể ẩn phòng. Hãy kiểm tra lại quyền quản lý kênh của bot.',
                     ephemeral: true
                 });
             }
@@ -1019,8 +1013,9 @@ client.on('interactionCreate', async (interaction) => {
                     components: newRows
                 });
             } catch (error) {
+                console.error('Lỗi hiện phòng:', error);
                 return interaction.reply({
-                    content: '❌ Bot không thể hiện phòng. Hãy kiểm tra quyền quản trị của bot.',
+                    content: '❌ Bot không thể hiện phòng. Hãy kiểm tra quyền của bot.',
                     ephemeral: true
                 });
             }
@@ -1137,7 +1132,6 @@ client.on('interactionCreate', async (interaction) => {
         return;
     }
 
-    // 4. MODAL SUBMITS (Đã sửa lỗi định dạng ID và cơ chế fetch tối ưu)
     if (interaction.isModalSubmit()) {
         const channel = interaction.member?.voice?.channel;
         if (!channel) {
