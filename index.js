@@ -127,23 +127,20 @@ async function sendBlogLog(guild, tag, content) {
     }
 }
 
-// Bảng điều khiển phân tách nút rõ ràng, màu sắc phân cấp chuẩn xác, có nút Chọn khu vực
+// Bảng điều khiển nút bấm phân cấp chuẩn xác, giao diện trực quan chuyên nghiệp
 function getControlRows(isOwner) {
     if (isOwner) {
-        // Hàng 1: Trạng thái Khóa / Mở / Ẩn / Hiện riêng biệt
         const row1 = new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId('vc_lock').setLabel('Khóa phòng').setStyle(ButtonStyle.Secondary).setEmoji('🔒'),
             new ButtonBuilder().setCustomId('vc_unlock').setLabel('Mở phòng').setStyle(ButtonStyle.Primary).setEmoji('🔓'),
             new ButtonBuilder().setCustomId('vc_hide').setLabel('Ẩn phòng').setStyle(ButtonStyle.Secondary).setEmoji('🥷'),
             new ButtonBuilder().setCustomId('vc_unhide').setLabel('Hiện phòng').setStyle(ButtonStyle.Primary).setEmoji('👁️')
         );
-        // Hàng 2: Cài đặt phòng (Đổi tên, Giới hạn, Chọn khu vực máy chủ)
         const row2 = new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId('vc_rename').setLabel('Đổi tên').setStyle(ButtonStyle.Primary).setEmoji('✏️'),
             new ButtonBuilder().setCustomId('vc_limit').setLabel('Giới hạn').setStyle(ButtonStyle.Primary).setEmoji('👥'),
             new ButtonBuilder().setCustomId('vc_region').setLabel('Chọn khu vực').setStyle(ButtonStyle.Success).setEmoji('🌐')
         );
-        // Hàng 3: Quản lý thành viên (Cấp quyền, Cấm, Đuổi, Chuyển chủ)
         const row3 = new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId('vc_allow').setLabel('Cấp quyền').setStyle(ButtonStyle.Success).setEmoji('✅'),
             new ButtonBuilder().setCustomId('vc_deny').setLabel('Cấm').setStyle(ButtonStyle.Danger).setEmoji('🚫'),
@@ -329,7 +326,7 @@ client.on('interactionCreate', async (interaction) => {
             return;
         }
 
-        // Xử lý chọn khu vực phòng thoại
+        // Xử lý chọn khu vực phòng thoại với Tự động ở đầu và đầy đủ tùy chọn
         if (interaction.customId === 'region_select_menu') {
             const channel = interaction.member?.voice?.channel;
             if (!channel) return interaction.reply({ content: '❌ Bạn cần ở trong phòng thoại để đổi khu vực.', ephemeral: true });
@@ -394,42 +391,45 @@ client.on('interactionCreate', async (interaction) => {
             return interaction.reply({ content: '❌ Chỉ chủ phòng mới có quyền thực hiện các thao tác quản lý này.', ephemeral: true });
         }
 
-        // Nút Khóa phòng: Chặn @everyone, thành viên thường không kết nối được
+        // Nút Khóa phòng
         if (customId === 'vc_lock') {
             await channel.permissionOverwrites.edit(interaction.guild.roles.everyone, { Connect: false });
             await channel.permissionOverwrites.edit(interaction.user, { Connect: true });
             await sendBlogLog(interaction.guild, 'KHÓA', `${interaction.user} đã khóa phòng`);
             await interaction.reply({ content: '🔒 Đã khóa phòng thành công. Chỉ những người được cấp quyền mới có thể vào.', ephemeral: true });
         }
-        // Nút Mở phòng: Bỏ chặn kết nối cho @everyone
+        // Nút Mở phòng
         else if (customId === 'vc_unlock') {
             await channel.permissionOverwrites.edit(interaction.guild.roles.everyone, { Connect: null });
             await sendBlogLog(interaction.guild, 'MỞ KHÓA', `${interaction.user} đã mở khóa phòng`);
             await interaction.reply({ content: '🔓 Đã mở khóa phòng thành công. Mọi người có thể tự do vào phòng.', ephemeral: true });
         }
-        // Nút Ẩn phòng: Thành viên thường không nhìn thấy kênh trên danh sách
+        // Nút Ẩn phòng: Chặn hoàn toàn ViewChannel đối với @everyone, thành viên thường không nhìn thấy kênh
         else if (customId === 'vc_hide') {
             await channel.permissionOverwrites.edit(interaction.guild.roles.everyone, { ViewChannel: false });
             await channel.permissionOverwrites.edit(interaction.user, { ViewChannel: true });
             await sendBlogLog(interaction.guild, 'ẨN', `${interaction.user} đã ẩn phòng`);
-            await interaction.reply({ content: '🥷 Đã ẩn phòng thành công. Thành viên thông thường sẽ không thấy kênh này.', ephemeral: true });
+            await interaction.reply({ content: '🥷 Đã ẩn phòng thành công. Thành viên thông thường sẽ không thấy kênh này trên danh sách.', ephemeral: true });
         }
-        // Nút Hiện phòng: Cho phép mọi người nhìn thấy kênh trở lại
+        // Nút Hiện phòng: Trả lại trạng thái mặc định cho @everyone
         else if (customId === 'vc_unhide') {
             await channel.permissionOverwrites.edit(interaction.guild.roles.everyone, { ViewChannel: null });
             await sendBlogLog(interaction.guild, 'HIỆN', `${interaction.user} đã hiển thị lại phòng`);
-            await interaction.reply({ content: '👁️ Đã hiện phòng thành công. Mọi người có thể nhìn thấy kênh.', ephemeral: true });
+            await interaction.reply({ content: '👁️ Đã hiện phòng thành công. Mọi người có thể nhìn thấy kênh trở lại.', ephemeral: true });
         }
-        // Nút Chọn khu vực (RTC Region)
+        // Nút Chọn khu vực với Tự động ở đầu và đầy đủ lựa chọn
         else if (customId === 'vc_region') {
             const selectMenu = new StringSelectMenuBuilder()
                 .setCustomId('region_select_menu')
                 .setPlaceholder('🌐 Chọn khu vực máy chủ âm thanh...')
                 .addOptions([
-                    { label: 'Tự động (Automatic)', value: 'auto', description: 'Hệ thống tự động chọn tối ưu' },
-                    { label: 'Singapore', value: 'singapore', description: 'Tối ưu cho khu vực Đông Nam Á' },
+                    { label: 'Tự động chọn khu vực (Automatic)', value: 'auto', description: 'Hệ thống tự động chọn máy chủ tối ưu nhất' },
+                    { label: 'Singapore', value: 'singapore', description: 'Tối ưu tốc độ cho khu vực Đông Nam Á' },
                     { label: 'Hong Kong', value: 'hongkong', description: 'Khu vực châu Á' },
-                    { label: 'Japan (Nhật Bản)', value: 'japan', description: 'Khu vực Đông Á' }
+                    { label: 'Japan (Nhật Bản)', value: 'japan', description: 'Khu vực Đông Á' },
+                    { label: 'Sydney (Úc)', value: 'sydney', description: 'Khu vực Châu Đại Dương' },
+                    { label: 'Brazil', value: 'brazil', description: 'Khu vực Nam Mỹ' },
+                    { label: 'US Central (Mỹ)', value: 'us-central', description: 'Khu vực Bắc Mỹ' }
                 ]);
             const row = new ActionRowBuilder().addComponents(selectMenu);
             return interaction.reply({ content: '🌐 **Vui lòng chọn khu vực máy chủ âm thanh phù hợp bên dưới:**', components: [row], ephemeral: true });
