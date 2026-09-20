@@ -127,7 +127,7 @@ async function sendBlogLog(guild, tag, content) {
     }
 }
 
-// Bảng điều khiển nút bấm chuẩn xác, nút đuổi dùng icon dép lào (🩴)
+// Bảng điều khiển nút bấm chuyên nghiệp, nút đuổi dùng icon dép lào (🩴)
 function getControlRows(isOwner) {
     if (isOwner) {
         const row1 = new ActionRowBuilder().addComponents(
@@ -236,6 +236,16 @@ async function createRoom(guild, member, category) {
         parent: category ? category.id : null
     });
 
+    // Cấp toàn quyền tuyệt đối cho chủ phòng ngay khi tạo
+    await newChannel.permissionOverwrites.edit(member, {
+        ViewChannel: true,
+        Connect: true,
+        ManageChannels: true,
+        MuteMembers: true,
+        DeafenMembers: true,
+        MoveMembers: true
+    });
+
     await member.voice.setChannel(newChannel);
     await saveRoom(guild.id, newChannel.id, member.id, category ? category.id : 0);
     await sendBlogLog(guild, 'TẠO PHÒNG', `Chủ: ${member} ➔${newChannel}`);
@@ -326,7 +336,7 @@ client.on('interactionCreate', async (interaction) => {
             return;
         }
 
-        // Xử lý chọn khu vực phòng thoại với đầy đủ full danh sách từ Discord
+        // Xử lý chọn khu vực với bảng menu rộng rãi, hiển thị đầy đủ full danh sách
         if (interaction.customId === 'region_select_menu') {
             const channel = interaction.member?.voice?.channel;
             if (!channel) return interaction.reply({ content: '❌ Bạn cần ở trong phòng thoại để đổi khu vực.', ephemeral: true });
@@ -359,6 +369,17 @@ client.on('interactionCreate', async (interaction) => {
                 return interaction.reply({ content: '❌ Chủ phòng cũ vẫn đang ở trong phòng, chưa thể nhận quyền.', ephemeral: true });
             }
             await saveRoom(interaction.guild.id, channel.id, interaction.user.id, channel.parentId || 0);
+            
+            // Cấp toàn quyền cho chủ mới
+            await channel.permissionOverwrites.edit(interaction.user, {
+                ViewChannel: true,
+                Connect: true,
+                ManageChannels: true,
+                MuteMembers: true,
+                DeafenMembers: true,
+                MoveMembers: true
+            });
+
             await sendBlogLog(interaction.guild, 'NHẬN CHỦ', `${interaction.user} tiếp quản phòng ${channel}`);
             
             const newEmbed = new EmbedBuilder()
@@ -371,11 +392,10 @@ client.on('interactionCreate', async (interaction) => {
 
             try {
                 await interaction.message.edit({ embeds: [newEmbed], components: getControlRows(true) });
-                await interaction.reply({ content: `👑 Chúc mừng **${interaction.user.displayName}** đã tiếp quản quyền chủ phòng thành công!`, ephemeral: true });
+                return interaction.reply({ content: `👑 Chúc mừng **${interaction.user.displayName}** đã tiếp quản quyền chủ phòng thành công!`, ephemeral: true });
             } catch (e) {
-                await interaction.reply({ content: `👑 **${interaction.user.displayName}** đã tiếp quản quyền chủ phòng thành công!`, ephemeral: true });
+                return interaction.reply({ content: `👑 **${interaction.user.displayName}** đã tiếp quản quyền chủ phòng thành công!`, ephemeral: true });
             }
-            return;
         }
 
         if (customId === 'vc_info') {
@@ -391,37 +411,37 @@ client.on('interactionCreate', async (interaction) => {
             return interaction.reply({ content: '❌ Chỉ chủ phòng mới có quyền thực hiện các thao tác quản lý này.', ephemeral: true });
         }
 
-        // Nút Khóa phòng
+        // Nút Khóa phòng (Ẩn thông báo chung, chỉ hiện ephemeral ngắn gọn)
         if (customId === 'vc_lock') {
             await channel.permissionOverwrites.edit(interaction.guild.roles.everyone, { Connect: false });
             await channel.permissionOverwrites.edit(interaction.user, { Connect: true });
             await sendBlogLog(interaction.guild, 'KHÓA', `${interaction.user} đã khóa phòng`);
-            return interaction.reply({ content: '🔒 Đã khóa phòng thành công. Chỉ những người được cấp quyền mới có thể vào.', ephemeral: true });
+            return interaction.reply({ content: '🔒 Đã khóa phòng thành công.', ephemeral: true });
         }
         // Nút Mở phòng
         else if (customId === 'vc_unlock') {
             await channel.permissionOverwrites.edit(interaction.guild.roles.everyone, { Connect: null });
             await sendBlogLog(interaction.guild, 'MỞ KHÓA', `${interaction.user} đã mở khóa phòng`);
-            return interaction.reply({ content: '🔓 Đã mở khóa phòng thành công. Mọi người có thể tự do vào phòng.', ephemeral: true });
+            return interaction.reply({ content: '🔓 Đã mở khóa phòng thành công.', ephemeral: true });
         }
-        // Nút Ẩn phòng: Chặn hoàn toàn ViewChannel đối với @everyone, thành viên thường không nhìn thấy kênh
+        // Nút Ẩn phòng: Chặn hoàn toàn ViewChannel đối với @everyone, cấp riêng quyền cho chủ phòng
         else if (customId === 'vc_hide') {
             await channel.permissionOverwrites.edit(interaction.guild.roles.everyone, { ViewChannel: false });
-            await channel.permissionOverwrites.edit(interaction.user, { ViewChannel: true });
+            await channel.permissionOverwrites.edit(interaction.user, { ViewChannel: true, Connect: true, ManageChannels: true });
             await sendBlogLog(interaction.guild, 'ẨN', `${interaction.user} đã ẩn phòng`);
-            return interaction.reply({ content: '🥷 Đã ẩn phòng thành công. Thành viên thông thường sẽ không thấy kênh này trên danh sách.', ephemeral: true });
+            return interaction.reply({ content: '🥷 Đã ẩn phòng thành công. Thành viên thông thường không thể nhìn thấy.', ephemeral: true });
         }
         // Nút Hiện phòng: Trả lại trạng thái mặc định cho @everyone
         else if (customId === 'vc_unhide') {
             await channel.permissionOverwrites.edit(interaction.guild.roles.everyone, { ViewChannel: null });
             await sendBlogLog(interaction.guild, 'HIỆN', `${interaction.user} đã hiển thị lại phòng`);
-            return interaction.reply({ content: '👁️ Đã hiện phòng thành công. Mọi người có thể nhìn thấy kênh trở lại.', ephemeral: true });
+            return interaction.reply({ content: '👁️ Đã hiện phòng thành công.', ephemeral: true });
         }
-        // Nút Chọn khu vực với Full danh sách Discord chuẩn xác
+        // Nút Chọn khu vực hiển thị bảng rộng rãi ở giữa màn hình với full danh sách
         else if (customId === 'vc_region') {
             const selectMenu = new StringSelectMenuBuilder()
                 .setCustomId('region_select_menu')
-                .setPlaceholder('🌐 Chọn khu vực máy chủ âm thanh...')
+                .setPlaceholder('🌐 [Bấm vào đây để chọn khu vực máy chủ âm thanh]')
                 .addOptions([
                     { label: 'Tự động chọn khu vực (Automatic)', value: 'auto', description: 'Hệ thống tự động chọn máy chủ tối ưu nhất' },
                     { label: 'Singapore', value: 'singapore', description: 'Tối ưu tốc độ cho khu vực Đông Nam Á' },
@@ -441,7 +461,7 @@ client.on('interactionCreate', async (interaction) => {
                     { label: 'London (Anh)', value: 'london', description: 'Khu vực Tây Âu' }
                 ]);
             const row = new ActionRowBuilder().addComponents(selectMenu);
-            return interaction.reply({ content: '🌐 **Vui lòng chọn khu vực máy chủ âm thanh phù hợp bên dưới:**', components: [row], ephemeral: true });
+            return interaction.reply({ content: '🌐 **BẢNG CHỌN KHU VỰC MÁY CHỦ ÂM THANH:**\n*Vui lòng chọn khu vực phù hợp bên dưới để có trải nghiệm thoại mượt mà nhất:*', components: [row], ephemeral: true });
         }
         else if (customId === 'vc_rename') {
             const modal = new ModalBuilder().setCustomId('modal_rename').setTitle('✏️ Đổi tên phòng');
@@ -585,6 +605,17 @@ client.on('interactionCreate', async (interaction) => {
             }
 
             await saveRoom(interaction.guild.id, channel.id, targetMember.id, channel.parentId || 0);
+            
+            // Cấp toàn quyền cho chủ mới
+            await channel.permissionOverwrites.edit(targetMember, {
+                ViewChannel: true,
+                Connect: true,
+                ManageChannels: true,
+                MuteMembers: true,
+                DeafenMembers: true,
+                MoveMembers: true
+            });
+
             await sendBlogLog(interaction.guild, 'CHUYỂN CHỦ', `Phòng ${channel} chuyển quyền cho ${targetMember}`);
             
             const newEmbed = new EmbedBuilder()
