@@ -7,7 +7,7 @@ const {
 const { Pool } = require('pg');
 const http = require('http');
 const googleTTS = require('google-tts-api');
-const { joinVoiceChannel, createAudioPlayer, createAudioResource, AudioPlayerStatus, entersState } = require('@discordjs/voice');
+const { joinVoiceChannel, createAudioPlayer, createAudioResource, AudioPlayerStatus } = require('@discordjs/voice');
 
 // Cấu hình biến môi trường
 const TOKEN = process.env.DISCORD_TOKEN ? process.env.DISCORD_TOKEN.trim() : '';
@@ -19,7 +19,6 @@ const ROOM_PREFIX = process.env.ROOM_PREFIX || '🔊';
 if (!TOKEN) throw new Error('Chưa có DISCORD_TOKEN trong môi trường!');
 if (!DATABASE_URL) throw new Error('Chưa có DATABASE_URL (Neon PostgreSQL) trong môi trường!');
 
-// Khởi tạo Discord Client
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
@@ -30,19 +29,14 @@ const client = new Client({
     ]
 });
 
-// Khởi tạo PostgreSQL Pool (Neon)
 const pool = new Pool({
     connectionString: DATABASE_URL,
     ssl: { rejectUnauthorized: false }
 });
 
-// Bộ nhớ tạm lưu trạng thái TTS và chống spam cho từng phòng
-// Cấu trúc: { channel_id: { volume: 1.0, muted: false, lastMsg: "", lastTime: 0, connection: null, player: null } }
 const roomTtsStates = new Map();
 
-// -----------------------------
-// Web Server (Chống sleep trên Render)
-// -----------------------------
+// Web Server chống sleep trên Render
 const PORT = process.env.PORT || 8080;
 http.createServer((req, res) => {
     res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
@@ -51,9 +45,7 @@ http.createServer((req, res) => {
     console.log(`Web server đã chạy trên cổng ${PORT}`);
 });
 
-// -----------------------------
 // Database Management (Neon PostgreSQL)
-// -----------------------------
 async function initDb() {
     try {
         await pool.query(`
@@ -142,9 +134,7 @@ async function sendBlogLog(guild, tag, content) {
     }
 }
 
-// -----------------------------
 // Xử lý Phát TTS Tiếng Việt
-// -----------------------------
 async function playTtsAudio(channel, text) {
     try {
         const chId = channel.id;
@@ -154,7 +144,6 @@ async function playTtsAudio(channel, text) {
         const state = roomTtsStates.get(chId);
         if (state.muted) return;
 
-        // Lấy URL âm thanh tiếng Việt từ google-tts-api
         const url = googleTTS.getAudioUrl(text, {
             lang: 'vi',
             slow: false,
@@ -163,12 +152,17 @@ async function playTtsAudio(channel, text) {
 
         let connection = state.connection;
         if (!connection || connection.joinConfig.channelId !== channel.id) {
-            connection = joinVoiceChannel({
-                channelId: channel.id,
-                guildId: channel.guild.id,
-                adapterCreator: channel.guild.voiceAdapterCreator,
-            });
-            state.connection = connection;
+            try {
+                connection = joinVoiceChannel({
+                    channelId: channel.id,
+                    guildId: channel.guild.id,
+                    adapterCreator: channel.guild.voiceAdapterCreator,
+                });
+                state.connection = connection;
+            } catch (err) {
+                console.error('Không thể kết nối voice cho TTS:', err);
+                return;
+            }
         }
 
         let player = state.player;
@@ -182,7 +176,6 @@ async function playTtsAudio(channel, text) {
         resource.volume.setVolume(state.volume);
 
         if (player.state.status === AudioPlayerStatus.Playing) {
-            // Đợi một chút nếu đang phát dở
             await new Promise(resolve => setTimeout(resolve, 800));
         }
 
@@ -192,9 +185,7 @@ async function playTtsAudio(channel, text) {
     }
 }
 
-// -----------------------------
-// Giao diện & Modals (Discord UI)
-// -----------------------------
+// Giao diện & Menus phân quyền động
 class DynamicCommandSelect extends StringSelectMenuBuilder {
     constructor(isOwner) {
         let options = [];
@@ -231,14 +222,6 @@ class DynamicCommandView extends ActionRowBuilder {
     }
 }
 
-class VoiceControlView extends ActionRowBuilder {
-    constructor() {
-        super();
-        // Sẽ được chia thành các ActionRow riêng biệt khi gửi tin nhắn
-    }
-}
-
-// Hàm tạo bảng điều khiển đầy đủ các nút
 function getVoiceControlRows() {
     const row1 = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId('vc_lock_unlock').setLabel('Khóa/Mở').setStyle(ButtonStyle.Secondary).setEmoji('🔒'),
@@ -248,7 +231,6 @@ function getVoiceControlRows() {
     );
 
     const row2 = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId('vc_region').setLabel('Khu vực').setStyle(ButtonStyle.Secondary).setEmoji('🌐'),
         new ButtonBuilder().setCustomId('tts_vol_up').setLabel('TTS Vol +').setStyle(ButtonStyle.Success).setEmoji('🔊'),
         new ButtonBuilder().setCustomId('tts_vol_down').setLabel('TTS Vol -').setStyle(ButtonStyle.Secondary).setEmoji('🔉'),
         new ButtonBuilder().setCustomId('tts_toggle_mute').setLabel('Bật/Tắt TTS').setStyle(ButtonStyle.Danger).setEmoji('🤖')
@@ -262,9 +244,6 @@ function getVoiceControlRows() {
     return [row1, row2, row3];
 }
 
-// -----------------------------
-// Sự kiện Bot sẵn sàng & Tương tác
-// -----------------------------
 client.once('ready', async () => {
     await initDb();
     client.user.setActivity('Quản lý phòng thoại & TTS Tiếng Việt');
@@ -289,12 +268,11 @@ client.once('ready', async () => {
     console.log('Đã đồng bộ Slash Commands thành công!');
 });
 
-// Quản lý sự kiện Voice (Tạo / Xóa phòng tự động)
 client.on('voiceStateUpdate', async (oldState, newState) => {
     const member = newState.member || oldState.member;
+    if (!member) return;
     const guild = member.guild;
 
-    // Người dùng vào kênh tạo phòng (Generator)
     if (newState.channel && !oldState.channel) {
         const gen = await getGenerator(guild.id);
         if (gen && newState.channel.id === gen.generator_id.toString()) {
@@ -302,7 +280,6 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
         }
     }
 
-    // Người dùng rời phòng thoại tạm
     if (oldState.channel && oldState.channel.id !== newState.channel?.id) {
         const gen = await getGenerator(guild.id);
         if (gen && oldState.channel.id === gen.generator_id.toString()) return;
@@ -313,7 +290,6 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
             const rName = oldState.channel.name;
             await deleteRoomRecord(rId);
 
-            // Ngắt kết nối bot TTS nếu có
             if (guild.members.me.voice?.channelId === rId) {
                 try {
                     guild.members.me.voice.disconnect();
@@ -345,7 +321,7 @@ async function createRoom(guild, member, category) {
 
     const newChannel = await guild.channels.create({
         name: `${ROOM_PREFIX} Phòng của ${member.displayName}`,
-        type: 2, // GuildVoice
+        type: 2,
         parent: category ? category.id : null
     });
 
@@ -376,11 +352,9 @@ async function createRoom(guild, member, category) {
     return newChannel;
 }
 
-// Quản lý tin nhắn & TTS + Chống Spam
 client.on('messageCreate', async (message) => {
     if (message.author.bot || !message.guild) return;
 
-    // 1. Kiểm tra chat trong phòng thoại tạm (TTS & Chống spam)
     const room = await getRoom(message.channel.id);
     if (room) {
         const contentPreview = message.content || '[Tệp đính kèm]';
@@ -394,7 +368,6 @@ client.on('messageCreate', async (message) => {
             }
             const state = roomTtsStates.get(chId);
 
-            // Chống spam: Nếu trùng nội dung trong vòng 3 giây thì bỏ qua
             if (message.content.trim() === state.lastMsg && (now - state.lastTime < 3000)) {
                 console.log('Phát hiện spam chat giống nhau, bỏ qua lượt đọc TTS.');
             } else {
@@ -402,14 +375,17 @@ client.on('messageCreate', async (message) => {
                 state.lastTime = now;
                 const voiceCh = message.guild.channels.cache.get(chId);
                 if (voiceCh && voiceCh.isVoiceBased()) {
-                    const textToRead = `${message.member?.displayName \vert{}\vert{} message.author.username} nói: ${message.content}`;
+                    // Đã tách biến hoàn toàn để triệt tiêu lỗi template string
+                    const memberName = message.member ? message.member.displayName : null;
+                    const authorName = message.author.username;
+                    const displayName = memberName || authorName;
+                    const textToRead = `${displayName} nói: ${message.content}`;
                     await playTtsAudio(voiceCh, textToRead);
                 }
             }
         }
     }
 
-    // 2. Theo dõi kênh chat được gán qua lệnh /track-channel
     const gen = await getGenerator(message.guild.id);
     if (gen && gen.tracked_text_channel_id && message.channel.id === gen.tracked_text_channel_id.toString()) {
         const contentPreview = message.content || '[Tệp đính kèm]';
@@ -417,14 +393,12 @@ client.on('messageCreate', async (message) => {
     }
 });
 
-// Xử lý Tương tác Nút bấm & Menu (Interactions)
 client.on('interactionCreate', async (interaction) => {
     if (!interaction.guild) return;
 
-    // Lệnh Slash Commands
     if (interaction.isChatInputCommand()) {
         if (interaction.commandName === 'setup') {
-            const categories = interaction.guild.channels.cache.filter(c => c.type === 4); // Category
+            const categories = interaction.guild.channels.cache.filter(c => c.type === 4);
             if (categories.size === 0) {
                 return interaction.reply({ content: '❌ Server chưa có danh mục (Category) nào!', ephemeral: true });
             }
@@ -446,12 +420,11 @@ client.on('interactionCreate', async (interaction) => {
         } else if (interaction.commandName === 'untrack-channel') {
             await clearTrackedChannel(interaction.guild.id);
             await sendBlogLog(interaction.guild, 'HỦY THEO DÕI', `${interaction.user} đã hủy theo dõi kênh`);
-            await interaction.reply({ content: '✅ Đã hủy theo dõi kênh chat thành công!', ephemeral=true });
+            await interaction.reply({ content: '✅ Đã hủy theo dõi kênh chat thành công!', ephemeral: true });
         }
         return;
     }
 
-    // Chọn danh mục qua menu setup
     if (interaction.isStringSelectMenu() && interaction.customId === 'setup_category_select') {
         const catId = interaction.values[0];
         const category = interaction.guild.channels.cache.get(catId);
@@ -468,14 +441,13 @@ client.on('interactionCreate', async (interaction) => {
         }
 
         await saveGenerator(interaction.guild.id, category.id, generator.id, blogChannel.id);
-        await interaction.update({ content: `✅ **Khởi tạo hệ thống thành công!**\n- Danh mục: **{category.name}**\n- Kênh tạo phòng: ${generator}\n- Kênh Blog Log: ${blogChannel}`, components: [] });
+        await interaction.update({ content: `✅ **Khởi tạo hệ thống thành công!**\n- Danh mục: **${category.name}**\n- Kênh tạo phòng: ${generator}\n- Kênh Blog Log: ${blogChannel}`, components: [] });
         return;
     }
 
-    // Xử lý Menu Lệnh Nhanh động
     if (interaction.isStringSelectMenu() && interaction.customId === 'dynamic_cmd_select') {
         const val = interaction.values[0];
-        const channel = interaction.member.voice.channel;
+        const channel = interaction.member?.voice?.channel;
         if (!channel) return interaction.reply({ content: '❌ Bạn phải đang ở trong phòng thoại tạm!', ephemeral: true });
 
         if (val === 'cmd_lock') {
@@ -529,7 +501,7 @@ client.on('interactionCreate', async (interaction) => {
             }
             await saveRoom(interaction.guild.id, channel.id, interaction.user.id, channel.parentId || 0);
             await sendBlogLog(interaction.guild, 'NHẬN CHỦ', `${interaction.user} tiếp quản phòng`);
-            await interaction.reply({ content: `👑 **{interaction.user.displayName}** đã tiếp quản quyền chủ phòng!`, ephemeral: true });
+            await interaction.reply({ content: `👑 **${interaction.user.displayName}** đã tiếp quản quyền chủ phòng!`, ephemeral: true });
         } else if (val === 'cmd_info') {
             const room = await getRoom(channel.id);
             let ownerName = 'Không xác định';
@@ -542,7 +514,6 @@ client.on('interactionCreate', async (interaction) => {
         return;
     }
 
-    // Xử lý Nút bấm trên bảng điều khiển
     if (interaction.isButton()) {
         const channel = interaction.member?.voice?.channel;
         const customId = interaction.customId;
@@ -617,7 +588,6 @@ client.on('interactionCreate', async (interaction) => {
         return;
     }
 
-    // Xử lý Modals (Nhập liệu)
     if (interaction.isModalSubmit()) {
         const channel = interaction.member?.voice?.channel;
         if (!channel) return interaction.reply({ content: '❌ Bạn phải ở trong phòng thoại!', ephemeral: true });
@@ -628,7 +598,7 @@ client.on('interactionCreate', async (interaction) => {
             const newRoomName = `${ROOM_PREFIX}${newNameVal}`;
             await channel.setName(newRoomName);
             await sendBlogLog(interaction.guild, 'ĐỔI TÊN', `${interaction.user} đổi \`${oldName}\` ➔ \`${newRoomName}\``);
-            await interaction.reply({ content: `✅ Đã đổi tên phòng thành: **{newNameVal}**`, ephemeral: true });
+            await interaction.reply({ content: `✅ Đã đổi tên phòng thành: **${newNameVal}**`, ephemeral: true });
         } else if (interaction.customId === 'modal_limit') {
             const limitVal = parseInt(interaction.fields.getTextInputValue('input_limit'));
             if (isNaN(limitVal) || limitVal < 0 || limitVal > 99) {
@@ -636,7 +606,7 @@ client.on('interactionCreate', async (interaction) => {
             }
             await channel.setUserLimit(limitVal);
             await sendBlogLog(interaction.guild, 'GIỚI HẠN', `${interaction.user} đổi giới hạn phòng thành ${limitVal}`);
-            await interaction.reply({ content: `✅ Đã cập nhật giới hạn phòng thành **{limitVal}** người.`, ephemeral: true });
+            await interaction.reply({ content: `✅ Đã cập nhật giới hạn phòng thành **${limitVal}** người.`, ephemeral: true });
         } else if (['modal_allow', 'modal_deny', 'modal_kick'].includes(interaction.customId)) {
             const uidStr = interaction.fields.getTextInputValue('input_uid').trim();
             const uid = parseInt(uidStr);
@@ -660,7 +630,7 @@ client.on('interactionCreate', async (interaction) => {
                     await sendBlogLog(interaction.guild, 'ĐUỔI', `${interaction.user} đá ${targetMember} ra khỏi phòng`);
                     await interaction.reply({ content: `👞 Đã đá ${targetMember} ra khỏi phòng.`, ephemeral: true });
                 } else {
-                    await interaction.reply({ content: '❌ Thành viên này không có trong phòng của bạn.', ephemeral=true);
+                    await interaction.reply({ content: '❌ Thành viên này không có trong phòng của bạn.', ephemeral: true });
                 }
             }
         } else if (interaction.customId === 'modal_transfer') {
