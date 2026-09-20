@@ -216,47 +216,39 @@ async function sendBlogLog(guild, tag, content) {
 }
 
 // ============================================================
-// CONTROL BUTTONS
+// DYNAMIC CONTROL BUTTONS (Gộp icon trực quan, tối giản)
 // ============================================================
 
-function getControlRows(isOwner) {
+function getControlRows(isOwner, isLocked = false, isHidden = false) {
     if (isOwner) {
+        // Hàng 1: Các nút trạng thái (Khóa/Mở, Ẩn/Hiện kết hợp thông minh)
         const row1 = new ActionRowBuilder().addComponents(
+            // Nút Khóa / Mở phòng gộp chung
             new ButtonBuilder()
-                .setCustomId('vc_lock')
-                .setLabel('Khóa phòng')
-                .setStyle(ButtonStyle.Secondary)
-                .setEmoji('🔒'),
+                .setCustomId(isLocked ? 'vc_unlock' : 'vc_lock')
+                .setLabel(isLocked ? 'Mở khóa phòng' : 'Khóa phòng')
+                .setStyle(isLocked ? ButtonStyle.Success : ButtonStyle.Secondary)
+                .setEmoji(isLocked ? '🔓' : '🔒'),
 
+            // Nút Ẩn / Hiện phòng gộp chung
             new ButtonBuilder()
-                .setCustomId('vc_unlock')
-                .setLabel('Mở phòng')
-                .setStyle(ButtonStyle.Primary)
-                .setEmoji('🔓'),
-
-            new ButtonBuilder()
-                .setCustomId('vc_hide')
-                .setLabel('Ẩn phòng')
-                .setStyle(ButtonStyle.Secondary)
-                .setEmoji('🥷'),
-
-            new ButtonBuilder()
-                .setCustomId('vc_unhide')
-                .setLabel('Hiện phòng')
-                .setStyle(ButtonStyle.Primary)
-                .setEmoji('👁️')
+                .setCustomId(isHidden ? 'vc_unhide' : 'vc_hide')
+                .setLabel(isHidden ? 'Hiện phòng' : 'Ẩn phòng')
+                .setStyle(isHidden ? ButtonStyle.Success : ButtonStyle.Secondary)
+                .setEmoji(isHidden ? '👁️' : '🥷')
         );
 
+        // Hàng 2: Tùy chỉnh phòng
         const row2 = new ActionRowBuilder().addComponents(
             new ButtonBuilder()
                 .setCustomId('vc_rename')
-                .setLabel('Đổi tên')
+                .setLabel('Đổi tên phòng')
                 .setStyle(ButtonStyle.Primary)
                 .setEmoji('✏️'),
 
             new ButtonBuilder()
                 .setCustomId('vc_limit')
-                .setLabel('Giới hạn')
+                .setLabel('Giới hạn người')
                 .setStyle(ButtonStyle.Primary)
                 .setEmoji('👥'),
 
@@ -267,28 +259,29 @@ function getControlRows(isOwner) {
                 .setEmoji('🌐')
         );
 
+        // Hàng 3: Quản lý thành viên & Chủ phòng
         const row3 = new ActionRowBuilder().addComponents(
             new ButtonBuilder()
                 .setCustomId('vc_allow')
-                .setLabel('Cấp quyền')
+                .setLabel('Cấp quyền vào')
                 .setStyle(ButtonStyle.Success)
                 .setEmoji('✅'),
 
             new ButtonBuilder()
                 .setCustomId('vc_deny')
-                .setLabel('Cấm')
+                .setLabel('Cấm thành viên')
                 .setStyle(ButtonStyle.Danger)
                 .setEmoji('🚫'),
 
             new ButtonBuilder()
                 .setCustomId('vc_kick')
-                .setLabel('Đuổi')
+                .setLabel('Đuổi ra ngoài')
                 .setStyle(ButtonStyle.Danger)
                 .setEmoji('🩴'),
 
             new ButtonBuilder()
                 .setCustomId('vc_transfer')
-                .setLabel('Chuyển chủ')
+                .setLabel('Chuyển chủ phòng')
                 .setStyle(ButtonStyle.Success)
                 .setEmoji('👑')
         );
@@ -296,6 +289,7 @@ function getControlRows(isOwner) {
         return [row1, row2, row3];
     }
 
+    // Dành cho thành viên thường
     const row = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
             .setCustomId('vc_claim')
@@ -311,6 +305,23 @@ function getControlRows(isOwner) {
     );
 
     return [row];
+}
+
+// Hàm hỗ trợ kiểm tra trạng thái phòng để render đúng nút
+async function getDynamicControlRows(channel, userId) {
+    const room = await getRoom(channel.id);
+    const isOwner = room && room.owner_id.toString() === userId.toString();
+    
+    if (!isOwner) return getControlRows(false);
+
+    // Kiểm tra trạng thái khóa của @everyone
+    const everyoneOverwrite = channel.permissionOverwrites.cache.get(channel.guild.roles.everyone.id);
+    const isLocked = everyoneOverwrite?.deny.has(PermissionsBitField.Flags.Connect) || false;
+
+    // Kiểm tra trạng thái ẩn của @everyone
+    const isHidden = everyoneOverwrite?.deny.has(PermissionsBitField.Flags.ViewChannel) || false;
+
+    return getControlRows(true, isLocked, isHidden);
 }
 
 // ============================================================
@@ -516,10 +527,12 @@ async function createRoom(guild, member, category) {
         .setFooter({ text: 'Hệ thống quản lý phòng thoại tự động' })
         .setTimestamp();
 
+    const rows = await getDynamicControlRows(newChannel, member.id);
+
     await newChannel.send({
         content: `👋 Xin chào **${member.displayName}**, phòng riêng của bạn đã sẵn sàng!`,
         embeds: [embed],
-        components: getControlRows(true)
+        components: rows
     });
 
     return newChannel;
@@ -558,7 +571,7 @@ client.on('messageCreate', async (message) => {
 });
 
 // ============================================================
-// ROOM VISIBILITY
+// ROOM VISIBILITY & PERMISSIONS
 // ============================================================
 
 async function setRoomVisibility(channel, hidden) {
@@ -580,9 +593,9 @@ async function setRoomVisibility(channel, hidden) {
         { reason: hidden ? 'Ẩn phòng bằng bot' : 'Hiện phòng bằng bot' }
     );
 
-    if (room) {
+    if (room && room.owner_id) {
         await channel.permissionOverwrites.edit(
-            room.owner_id.toString(),
+            String(room.owner_id),
             {
                 ViewChannel: true,
                 Connect: true,
@@ -617,10 +630,6 @@ async function setRoomVisibility(channel, hidden) {
     return hidden;
 }
 
-// ============================================================
-// ENSURE BOT / OWNER PERMISSIONS
-// ============================================================
-
 async function ensureRoomManagementPermissions(channel, ownerId) {
     const guild = channel.guild;
     const botMember = guild.members.me;
@@ -651,7 +660,7 @@ async function ensureRoomManagementPermissions(channel, ownerId) {
 
     if (ownerId) {
         await channel.permissionOverwrites.edit(
-            ownerId.toString(),
+            String(ownerId),
             {
                 ViewChannel: true,
                 Connect: true,
@@ -659,9 +668,7 @@ async function ensureRoomManagementPermissions(channel, ownerId) {
                 ManageRoles: true,
                 MoveMembers: true,
                 MuteMembers: true,
-                DeafenMembers: true,
-                Speak: true,
-                UseVAD: true
+                DeafenMembers: true
             },
             { reason: 'Cấp quyền quản trị phòng cho chủ phòng' }
         );
@@ -914,10 +921,12 @@ client.on('interactionCreate', async (interaction) => {
                 .setFooter({ text: 'Hệ thống quản lý phòng thoại tự động' })
                 .setTimestamp();
 
+            const updatedRows = await getDynamicControlRows(channel, interaction.user.id);
+
             try {
                 await interaction.message.edit({
                     embeds: [newEmbed],
-                    components: getControlRows(true)
+                    components: updatedRows
                 });
             } catch (e) {}
 
@@ -953,6 +962,7 @@ client.on('interactionCreate', async (interaction) => {
             });
         }
 
+        // Xử lý nút Khóa phòng
         if (customId === 'vc_lock') {
             await channel.permissionOverwrites.edit(
                 interaction.guild.roles.everyone,
@@ -964,9 +974,12 @@ client.on('interactionCreate', async (interaction) => {
                 'KHÓA',
                 `${interaction.user} đã khóa phòng`
             );
-            return interaction.deferUpdate();
+            
+            const newRows = await getDynamicControlRows(channel, interaction.user.id);
+            return interaction.update({ components: newRows });
         }
 
+        // Xử lý nút Mở khóa phòng
         if (customId === 'vc_unlock') {
             await channel.permissionOverwrites.edit(
                 interaction.guild.roles.everyone,
@@ -978,9 +991,12 @@ client.on('interactionCreate', async (interaction) => {
                 'MỞ KHÓA',
                 `${interaction.user} đã mở khóa phòng`
             );
-            return interaction.deferUpdate();
+            
+            const newRows = await getDynamicControlRows(channel, interaction.user.id);
+            return interaction.update({ components: newRows });
         }
 
+        // Xử lý nút Ẩn phòng
         if (customId === 'vc_hide') {
             try {
                 await setRoomVisibility(channel, true);
@@ -989,9 +1005,11 @@ client.on('interactionCreate', async (interaction) => {
                     'ẨN',
                     `${interaction.user} đã ẩn phòng ${channel}`
                 );
+                
+                const newRows = await getDynamicControlRows(channel, interaction.user.id);
                 return interaction.update({
-                    content: '🥷 **Phòng đã được ẩn.** Thành viên không có quyền riêng sẽ không còn nhìn thấy phòng này.',
-                    components: getControlRows(true)
+                    content: '🥷 **Phòng đã được ẩn.**',
+                    components: newRows
                 });
             } catch (error) {
                 console.error('Lỗi vc_hide:', error);
@@ -1002,6 +1020,7 @@ client.on('interactionCreate', async (interaction) => {
             }
         }
 
+        // Xử lý nút Hiện phòng
         if (customId === 'vc_unhide') {
             try {
                 await setRoomVisibility(channel, false);
@@ -1010,9 +1029,11 @@ client.on('interactionCreate', async (interaction) => {
                     'HIỆN',
                     `${interaction.user} đã hiển thị lại phòng ${channel}`
                 );
+                
+                const newRows = await getDynamicControlRows(channel, interaction.user.id);
                 return interaction.update({
-                    content: '👁️ **Phòng đã được hiện trở lại** cho tất cả thành viên.',
-                    components: getControlRows(true)
+                    content: '👁️ **Phòng đã được hiện trở lại.**',
+                    components: newRows
                 });
             } catch (error) {
                 console.error('Lỗi vc_unhide:', error);
@@ -1343,10 +1364,12 @@ client.on('interactionCreate', async (interaction) => {
                 .setFooter({ text: 'Hệ thống quản lý phòng thoại tự động' })
                 .setTimestamp();
 
+            const updatedRows = await getDynamicControlRows(channel, targetMember.id);
+
             try {
                 await interaction.message.edit({
                     embeds: [newEmbed],
-                    components: getControlRows(true)
+                    components: updatedRows
                 });
             } catch (e) {}
 
