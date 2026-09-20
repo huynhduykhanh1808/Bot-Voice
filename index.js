@@ -230,10 +230,12 @@ async function createRoom(guild, member, category) {
         await deleteRoomRecord(existing.channel_id);
     }
 
+    // Tạo kênh thoại ở chế độ trò chuyện bình thường (VAD / Speak tự do)
     const newChannel = await guild.channels.create({
         name: `${ROOM_PREFIX} Phòng của ${member.displayName}`,
         type: 2,
-        parent: category ? category.id : null
+        parent: category ? category.id : null,
+        rtcRegion: null
     });
 
     // Cấp toàn quyền tuyệt đối cho chủ phòng ngay khi tạo
@@ -339,7 +341,7 @@ client.on('interactionCreate', async (interaction) => {
             return;
         }
 
-        // Xử lý chọn khu vực với bảng menu rộng rãi, hiển thị đầy đủ full danh sách
+        // Xử lý chọn khu vực với bảng menu rộng rãi ở giữa màn hình
         if (interaction.customId === 'region_select_menu') {
             const channel = interaction.member?.voice?.channel;
             if (!channel) return interaction.reply({ content: '❌ Bạn cần ở trong phòng thoại để đổi khu vực.', ephemeral: true });
@@ -417,7 +419,7 @@ client.on('interactionCreate', async (interaction) => {
             return interaction.reply({ content: '❌ Chỉ chủ phòng mới có quyền thực hiện các thao tác quản lý này.', ephemeral: true });
         }
 
-        // Chạy ngầm hoàn toàn các thao tác, không gửi thông báo rườm rà lên khung chat
+        // Chạy ngầm hoàn toàn, không spam tin nhắn chat
         if (customId === 'vc_lock') {
             await channel.permissionOverwrites.edit(interaction.guild.roles.everyone, { Connect: false });
             await channel.permissionOverwrites.edit(interaction.user, { Connect: true });
@@ -429,7 +431,7 @@ client.on('interactionCreate', async (interaction) => {
             await sendBlogLog(interaction.guild, 'MỞ KHÓA', `${interaction.user} đã mở khóa phòng`);
             return interaction.deferUpdate();
         }
-        // Nút Ẩn phòng: Tắt hoàn toàn quyền xem của @everyone và cấp toàn quyền độc quyền cho chủ phòng
+        // Nút Ẩn phòng: Cấp toàn quyền tuyệt đối cho chủ phòng và ẩn hoàn toàn với @everyone
         else if (customId === 'vc_hide') {
             await channel.permissionOverwrites.edit(interaction.guild.roles.everyone, { ViewChannel: false });
             await channel.permissionOverwrites.edit(interaction.user, { 
@@ -438,7 +440,10 @@ client.on('interactionCreate', async (interaction) => {
                 ManageChannels: true,
                 MuteMembers: true,
                 DeafenMembers: true,
-                MoveMembers: true
+                MoveMembers: true,
+                Stream: true,
+                Speak: true,
+                UseVAD: true
             });
             await sendBlogLog(interaction.guild, 'ẨN', `${interaction.user} đã ẩn phòng`);
             return interaction.deferUpdate();
@@ -449,7 +454,7 @@ client.on('interactionCreate', async (interaction) => {
             await sendBlogLog(interaction.guild, 'HIỆN', `${interaction.user} đã hiển thị lại phòng`);
             return interaction.deferUpdate();
         }
-        // Nút Chọn khu vực hiển thị bảng menu ở giữa màn hình với full danh sách
+        // Nút Chọn khu vực mở menu chọn ở giữa màn hình
         else if (customId === 'vc_region') {
             const selectMenu = new StringSelectMenuBuilder()
                 .setCustomId('region_select_menu')
