@@ -5,7 +5,7 @@ const {
     TextInputBuilder, TextInputStyle, PermissionsBitField 
 } = require('discord.js');
 const { Pool } = require('pg');
-const http = http = require('http');
+const http = require('http');
 
 const TOKEN = process.env.DISCORD_TOKEN ? process.env.DISCORD_TOKEN.trim() : '';
 const DATABASE_URL = process.env.DATABASE_URL ? process.env.DATABASE_URL.trim() : '';
