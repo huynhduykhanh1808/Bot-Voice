@@ -419,7 +419,7 @@ client.on('interactionCreate', async (interaction) => {
             return interaction.reply({ content: '❌ Chỉ chủ phòng mới có quyền thực hiện các thao tác quản lý này.', ephemeral: true });
         }
 
-        // Chạy ngầm hoàn toàn, không spam tin nhắn chat
+        // Chạy ngầm hoàn toàn, giữ sạch khung chat tuyệt đối
         if (customId === 'vc_lock') {
             await channel.permissionOverwrites.edit(interaction.guild.roles.everyone, { Connect: false });
             await channel.permissionOverwrites.edit(interaction.user, { Connect: true });
@@ -431,7 +431,7 @@ client.on('interactionCreate', async (interaction) => {
             await sendBlogLog(interaction.guild, 'MỞ KHÓA', `${interaction.user} đã mở khóa phòng`);
             return interaction.deferUpdate();
         }
-        // Nút Ẩn phòng: Cấp toàn quyền tuyệt đối cho chủ phòng và ẩn hoàn toàn với @everyone
+        // Nút Ẩn phòng: Tắt hoàn toàn quyền xem của @everyone và cấp toàn quyền tuyệt đối cho chủ phòng
         else if (customId === 'vc_hide') {
             await channel.permissionOverwrites.edit(interaction.guild.roles.everyone, { ViewChannel: false });
             await channel.permissionOverwrites.edit(interaction.user, { 
