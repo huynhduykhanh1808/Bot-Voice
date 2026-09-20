@@ -127,20 +127,21 @@ async function sendBlogLog(guild, tag, content) {
     }
 }
 
-// Bảng điều khiển phân tách nút rõ ràng, màu sắc phân cấp chuyên nghiệp
+// Bảng điều khiển phân tách nút rõ ràng, màu sắc phân cấp chuẩn xác, có nút Chọn khu vực
 function getControlRows(isOwner) {
     if (isOwner) {
-        // Hàng 1: Trạng thái phòng (Khóa riêng, Mở riêng, Ẩn riêng, Hiện riêng)
+        // Hàng 1: Trạng thái Khóa / Mở / Ẩn / Hiện riêng biệt
         const row1 = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId('vc_lock').setLabel('Khóa').setStyle(ButtonStyle.Secondary).setEmoji('🔒'),
-            new ButtonBuilder().setCustomId('vc_unlock').setLabel('Mở').setStyle(ButtonStyle.Primary).setEmoji('🔓'),
-            new ButtonBuilder().setCustomId('vc_hide').setLabel('Ẩn').setStyle(ButtonStyle.Secondary).setEmoji('🥷'),
-            new ButtonBuilder().setCustomId('vc_unhide').setLabel('Hiện').setStyle(ButtonStyle.Primary).setEmoji('👁️')
+            new ButtonBuilder().setCustomId('vc_lock').setLabel('Khóa phòng').setStyle(ButtonStyle.Secondary).setEmoji('🔒'),
+            new ButtonBuilder().setCustomId('vc_unlock').setLabel('Mở phòng').setStyle(ButtonStyle.Primary).setEmoji('🔓'),
+            new ButtonBuilder().setCustomId('vc_hide').setLabel('Ẩn phòng').setStyle(ButtonStyle.Secondary).setEmoji('🥷'),
+            new ButtonBuilder().setCustomId('vc_unhide').setLabel('Hiện phòng').setStyle(ButtonStyle.Primary).setEmoji('👁️')
         );
-        // Hàng 2: Cài đặt phòng (Đổi tên, Giới hạn)
+        // Hàng 2: Cài đặt phòng (Đổi tên, Giới hạn, Chọn khu vực máy chủ)
         const row2 = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId('vc_rename').setLabel('Đổi tên phòng').setStyle(ButtonStyle.Primary).setEmoji('✏️'),
-            new ButtonBuilder().setCustomId('vc_limit').setLabel('Giới hạn người').setStyle(ButtonStyle.Primary).setEmoji('👥')
+            new ButtonBuilder().setCustomId('vc_rename').setLabel('Đổi tên').setStyle(ButtonStyle.Primary).setEmoji('✏️'),
+            new ButtonBuilder().setCustomId('vc_limit').setLabel('Giới hạn').setStyle(ButtonStyle.Primary).setEmoji('👥'),
+            new ButtonBuilder().setCustomId('vc_region').setLabel('Chọn khu vực').setStyle(ButtonStyle.Success).setEmoji('🌐')
         );
         // Hàng 3: Quản lý thành viên (Cấp quyền, Cấm, Đuổi, Chuyển chủ)
         const row3 = new ActionRowBuilder().addComponents(
@@ -242,13 +243,12 @@ async function createRoom(guild, member, category) {
     await saveRoom(guild.id, newChannel.id, member.id, category ? category.id : 0);
     await sendBlogLog(guild, 'TẠO PHÒNG', `Chủ: ${member} ➔${newChannel}`);
 
-    // Thiết kế Embed sang trọng, màu Xanh Dương đậm chuyên nghiệp
     const embed = new EmbedBuilder()
         .setTitle('🛡️ TRUNG TÂM QUẢN LÝ PHÒNG THOẠI')
-        .setDescription(`👑 **Chủ phòng:** ${member}\n\n✨ *Chào mừng bạn đến với không gian trò chuyện riêng tư.* Sử dụng các nút bấm bên dưới để quản lý và tùy chỉnh phòng thoại một cách dễ dàng, văn minh và lịch sự.`)
+        .setDescription(`👑 **Chủ phòng:** ${member}\n\n✨ Chào mừng bạn đến với không gian trò chuyện riêng tư. Sử dụng các nút bấm bên dưới để quản lý phòng thoại của bạn một cách nhanh chóng và chính xác.`)
         .setColor(0x1E90FF)
         .setThumbnail(member.user.displayAvatarURL())
-        .setFooter({ text: 'Hệ thống quản lý phòng thoại tự động • Văn minh & Lịch sự' })
+        .setFooter({ text: 'Hệ thống quản lý phòng thoại tự động' })
         .setTimestamp();
 
     await newChannel.send({
@@ -308,24 +308,43 @@ client.on('interactionCreate', async (interaction) => {
         return;
     }
 
-    if (interaction.isStringSelectMenu() && interaction.customId === 'setup_category_select') {
-        const catId = interaction.values[0];
-        const category = interaction.guild.channels.cache.get(catId);
-        if (!category) return interaction.reply({ content: '❌ Danh mục không hợp lệ!', ephemeral: true });
+    if (interaction.isStringSelectMenu()) {
+        if (interaction.customId === 'setup_category_select') {
+            const catId = interaction.values[0];
+            const category = interaction.guild.channels.cache.get(catId);
+            if (!category) return interaction.reply({ content: '❌ Danh mục không hợp lệ!', ephemeral: true });
 
-        let generator = category.children.cache.find(c => c.name === DEFAULT_GENERATOR && c.isVoiceBased());
-        if (!generator) {
-            generator = await interaction.guild.channels.create({ name: DEFAULT_GENERATOR, type: 2, parent: category.id });
+            let generator = category.children.cache.find(c => c.name === DEFAULT_GENERATOR && c.isVoiceBased());
+            if (!generator) {
+                generator = await interaction.guild.channels.create({ name: DEFAULT_GENERATOR, type: 2, parent: category.id });
+            }
+
+            let blogChannel = category.children.cache.find(c => c.name === FIXED_BLOG_NAME && !c.isVoiceBased());
+            if (!blogChannel) {
+                blogChannel = await interaction.guild.channels.create({ name: FIXED_BLOG_NAME, type: 0, parent: category.id });
+            }
+
+            await saveGenerator(interaction.guild.id, category.id, generator.id, blogChannel.id);
+            await interaction.update({ content: `✅ **Khởi tạo hệ thống thành công!**\n- Danh mục: **${category.name}**\n- Kênh tạo phòng: ${generator}\n- Kênh Blog Log: ${blogChannel}`, components: [] });
+            return;
         }
 
-        let blogChannel = category.children.cache.find(c => c.name === FIXED_BLOG_NAME && !c.isVoiceBased());
-        if (!blogChannel) {
-            blogChannel = await interaction.guild.channels.create({ name: FIXED_BLOG_NAME, type: 0, parent: category.id });
-        }
+        // Xử lý chọn khu vực phòng thoại
+        if (interaction.customId === 'region_select_menu') {
+            const channel = interaction.member?.voice?.channel;
+            if (!channel) return interaction.reply({ content: '❌ Bạn cần ở trong phòng thoại để đổi khu vực.', ephemeral: true });
 
-        await saveGenerator(interaction.guild.id, category.id, generator.id, blogChannel.id);
-        await interaction.update({ content: `✅ **Khởi tạo hệ thống thành công!**\n- Danh mục: **${category.name}**\n- Kênh tạo phòng: ${generator}\n- Kênh Blog Log: ${blogChannel}`, components: [] });
-        return;
+            const room = await getRoom(channel.id);
+            if (!room || room.owner_id.toString() !== interaction.user.id) {
+                return interaction.reply({ content: '❌ Chỉ chủ phòng mới có quyền đổi khu vực máy chủ.', ephemeral: true });
+            }
+
+            const val = interaction.values[0];
+            const regionVal = val === 'auto' ? null : val;
+            await channel.setRTCRegion(regionVal);
+            await sendBlogLog(interaction.guild, 'ĐỔI KHU VỰC', `${interaction.user} đổi khu vực phòng thành ${val.toUpperCase()}`);
+            return interaction.update({ content: `🌐 Đã chuyển khu vực máy chủ âm thanh sang: **${val.toUpperCase()}**`, components: [] });
+        }
     }
 
     if (interaction.isButton()) {
@@ -347,10 +366,10 @@ client.on('interactionCreate', async (interaction) => {
             
             const newEmbed = new EmbedBuilder()
                 .setTitle('🛡️ TRUNG TÂM QUẢN LÝ PHÒNG THOẠI')
-                .setDescription(`👑 **Chủ phòng:** ${interaction.user}\n\n✨ *Chào mừng bạn đến với không gian trò chuyện riêng tư.* Sử dụng các nút bấm bên dưới để quản lý và tùy chỉnh phòng thoại một cách dễ dàng, văn minh và lịch sự.`)
+                .setDescription(`👑 **Chủ phòng:** ${interaction.user}\n\n✨ Chào mừng bạn đến với không gian trò chuyện riêng tư. Sử dụng các nút bấm bên dưới để quản lý phòng thoại của bạn một cách nhanh chóng và chính xác.`)
                 .setColor(0x1E90FF)
                 .setThumbnail(interaction.user.displayAvatarURL())
-                .setFooter({ text: 'Hệ thống quản lý phòng thoại tự động • Văn minh & Lịch sự' })
+                .setFooter({ text: 'Hệ thống quản lý phòng thoại tự động' })
                 .setTimestamp();
 
             try {
@@ -375,38 +394,52 @@ client.on('interactionCreate', async (interaction) => {
             return interaction.reply({ content: '❌ Chỉ chủ phòng mới có quyền thực hiện các thao tác quản lý này.', ephemeral: true });
         }
 
-        // Xử lý riêng nút KHÓA
+        // Nút Khóa phòng: Chặn @everyone, thành viên thường không kết nối được
         if (customId === 'vc_lock') {
             await channel.permissionOverwrites.edit(interaction.guild.roles.everyone, { Connect: false });
             await channel.permissionOverwrites.edit(interaction.user, { Connect: true });
             await sendBlogLog(interaction.guild, 'KHÓA', `${interaction.user} đã khóa phòng`);
             await interaction.reply({ content: '🔒 Đã khóa phòng thành công. Chỉ những người được cấp quyền mới có thể vào.', ephemeral: true });
         }
-        // Xử lý riêng nút MỞ KHÓA
+        // Nút Mở phòng: Bỏ chặn kết nối cho @everyone
         else if (customId === 'vc_unlock') {
             await channel.permissionOverwrites.edit(interaction.guild.roles.everyone, { Connect: null });
             await sendBlogLog(interaction.guild, 'MỞ KHÓA', `${interaction.user} đã mở khóa phòng`);
             await interaction.reply({ content: '🔓 Đã mở khóa phòng thành công. Mọi người có thể tự do vào phòng.', ephemeral: true });
         }
-        // Xử lý riêng nút ẨN
+        // Nút Ẩn phòng: Thành viên thường không nhìn thấy kênh trên danh sách
         else if (customId === 'vc_hide') {
             await channel.permissionOverwrites.edit(interaction.guild.roles.everyone, { ViewChannel: false });
             await channel.permissionOverwrites.edit(interaction.user, { ViewChannel: true });
             await sendBlogLog(interaction.guild, 'ẨN', `${interaction.user} đã ẩn phòng`);
-            await interaction.reply({ content: '🥷 Đã ẩn phòng thoại thành công.', ephemeral: true });
+            await interaction.reply({ content: '🥷 Đã ẩn phòng thành công. Thành viên thông thường sẽ không thấy kênh này.', ephemeral: true });
         }
-        // Xử lý riêng nút HIỆN
+        // Nút Hiện phòng: Cho phép mọi người nhìn thấy kênh trở lại
         else if (customId === 'vc_unhide') {
             await channel.permissionOverwrites.edit(interaction.guild.roles.everyone, { ViewChannel: null });
             await sendBlogLog(interaction.guild, 'HIỆN', `${interaction.user} đã hiển thị lại phòng`);
-            await interaction.reply({ content: '👁️ Đã hiện phòng thoại thành công.', ephemeral: true });
+            await interaction.reply({ content: '👁️ Đã hiện phòng thành công. Mọi người có thể nhìn thấy kênh.', ephemeral: true });
+        }
+        // Nút Chọn khu vực (RTC Region)
+        else if (customId === 'vc_region') {
+            const selectMenu = new StringSelectMenuBuilder()
+                .setCustomId('region_select_menu')
+                .setPlaceholder('🌐 Chọn khu vực máy chủ âm thanh...')
+                .addOptions([
+                    { label: 'Tự động (Automatic)', value: 'auto', description: 'Hệ thống tự động chọn tối ưu' },
+                    { label: 'Singapore', value: 'singapore', description: 'Tối ưu cho khu vực Đông Nam Á' },
+                    { label: 'Hong Kong', value: 'hongkong', description: 'Khu vực châu Á' },
+                    { label: 'Japan (Nhật Bản)', value: 'japan', description: 'Khu vực Đông Á' }
+                ]);
+            const row = new ActionRowBuilder().addComponents(selectMenu);
+            return interaction.reply({ content: '🌐 **Vui lòng chọn khu vực máy chủ âm thanh phù hợp bên dưới:**', components: [row], ephemeral: true });
         }
         else if (customId === 'vc_rename') {
             const modal = new ModalBuilder().setCustomId('modal_rename').setTitle('✏️ Đổi tên phòng');
             const input = new TextInputBuilder()
                 .setCustomId('input_rename')
-                .setLabel('Nhập tên phòng mới văn minh, lịch sự')
-                .setPlaceholder('Ví dụ: Góc tâm sự, Chơi game...')
+                .setLabel('Nhập tên phòng mới (Ví dụ: Góc tâm sự)')
+                .setPlaceholder('Nhập tên mới tại đây...')
                 .setStyle(TextInputStyle.Short)
                 .setMaxLength(40)
                 .setRequired(true);
@@ -441,7 +474,7 @@ client.on('interactionCreate', async (interaction) => {
             const modal = new ModalBuilder().setCustomId('modal_deny').setTitle('🚫 Cấm thành viên');
             const input = new TextInputBuilder()
                 .setCustomId('input_uid')
-                .setLabel('Nhập ID Discord cần cấm lịch sự')
+                .setLabel('Nhập ID Discord thành viên cần cấm')
                 .setPlaceholder('Ví dụ: 123456789012345678')
                 .setStyle(TextInputStyle.Short)
                 .setMaxLength(25)
@@ -453,7 +486,7 @@ client.on('interactionCreate', async (interaction) => {
             const modal = new ModalBuilder().setCustomId('modal_kick').setTitle('👞 Mời rời phòng');
             const input = new TextInputBuilder()
                 .setCustomId('input_uid')
-                .setLabel('Nhập ID Discord cần mời ra ngoài')
+                .setLabel('Nhập ID Discord thành viên cần mời ra')
                 .setPlaceholder('Ví dụ: 123456789012345678')
                 .setStyle(TextInputStyle.Short)
                 .setMaxLength(25)
@@ -491,7 +524,7 @@ client.on('interactionCreate', async (interaction) => {
             const newRoomName = `${ROOM_PREFIX}${newNameVal}`;
             await channel.setName(newRoomName);
             await sendBlogLog(interaction.guild, 'ĐỔI TÊN', `${interaction.user} đổi \`${oldName}\` ➔ \`${newRoomName}\``);
-            await interaction.reply({ content: `✅ Đã đổi tên phòng thành: **${newNameVal}**. Chúc bạn trò chuyện vui vẻ, văn minh!`, ephemeral: true });
+            await interaction.reply({ content: `✅ Đã đổi tên phòng thành: **${newNameVal}**`, ephemeral: true });
         } else if (interaction.customId === 'modal_limit') {
             const limitVal = parseInt(interaction.fields.getTextInputValue('input_limit'));
             if (isNaN(limitVal) || limitVal < 0 || limitVal > 99) {
@@ -522,12 +555,12 @@ client.on('interactionCreate', async (interaction) => {
                     await targetMember.voice.disconnect();
                 }
                 await sendBlogLog(interaction.guild, 'CẤM', `${interaction.user} cấm ${targetMember}`);
-                await interaction.reply({ content: `🚫 Đã cấm thành viên **${targetMember.displayName}** khỏi phòng lịch sự.`, ephemeral: true });
+                await interaction.reply({ content: `🚫 Đã cấm thành viên **${targetMember.displayName}** khỏi phòng.`, ephemeral: true });
             } else if (interaction.customId === 'modal_kick') {
                 if (targetMember.voice && targetMember.voice.channelId === channel.id) {
                     await targetMember.voice.disconnect();
                     await sendBlogLog(interaction.guild, 'ĐUỔI', `${interaction.user} đá ${targetMember} ra khỏi phòng`);
-                    await interaction.reply({ content: `👞 Đã mời thành viên **${targetMember.displayName}** rời khỏi phòng nhẹ nhàng.`, ephemeral: true });
+                    await interaction.reply({ content: `👞 Đã mời thành viên **${targetMember.displayName}** rời khỏi phòng.`, ephemeral: true });
                 } else {
                     await interaction.reply({ content: '❌ Thành viên này hiện không có trong phòng của bạn.', ephemeral: true });
                 }
@@ -547,10 +580,10 @@ client.on('interactionCreate', async (interaction) => {
             
             const newEmbed = new EmbedBuilder()
                 .setTitle('🛡️ TRUNG TÂM QUẢN LÝ PHÒNG THOẠI')
-                .setDescription(`👑 **Chủ phòng:** ${targetMember}\n\n✨ *Chào mừng bạn đến với không gian trò chuyện riêng tư.* Sử dụng các nút bấm bên dưới để quản lý và tùy chỉnh phòng thoại một cách dễ dàng, văn minh và lịch sự.`)
+                .setDescription(`👑 **Chủ phòng:** ${targetMember}\n\n✨ Chào mừng bạn đến với không gian trò chuyện riêng tư. Sử dụng các nút bấm bên dưới để quản lý phòng thoại của bạn một cách nhanh chóng và chính xác.`)
                 .setColor(0x1E90FF)
                 .setThumbnail(targetMember.user.displayAvatarURL())
-                .setFooter({ text: 'Hệ thống quản lý phòng thoại tự động • Văn minh & Lịch sự' })
+                .setFooter({ text: 'Hệ thống quản lý phòng thoại tự động' })
                 .setTimestamp();
 
             try {
