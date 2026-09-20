@@ -546,7 +546,7 @@ client.on('messageCreate', async (message) => {
 });
 
 // ============================================================
-// ROOM VISIBILITY & PERMISSIONS (Đã vá lỗi an toàn tuyệt đối)
+// ROOM VISIBILITY & PERMISSIONS
 // ============================================================
 
 async function setRoomVisibility(channel, hidden) {
@@ -568,7 +568,6 @@ async function setRoomVisibility(channel, hidden) {
         { reason: hidden ? 'Ẩn phòng bằng bot' : 'Hiện phòng bằng bot' }
     );
 
-    // Kiểm tra an toàn giá trị owner_id trước khi ép kiểu
     if (room && room.owner_id) {
         const ownerIdStr = String(room.owner_id).trim();
         if (ownerIdStr && ownerIdStr !== '0') {
@@ -650,6 +649,8 @@ async function ensureRoomManagementPermissions(channel, ownerId) {
                     {
                         ViewChannel: true,
                         Connect: true,
+                        Speak: true,
+                        UseVAD: true,
                         ManageChannels: true,
                         ManageRoles: true,
                         MoveMembers: true,
@@ -672,6 +673,7 @@ async function ensureRoomManagementPermissions(channel, ownerId) {
 client.on('interactionCreate', async (interaction) => {
     if (!interaction.guild) return;
 
+    // 1. SLASH COMMANDS
     if (interaction.isChatInputCommand()) {
         if (interaction.commandName === 'setup') {
             const categories = interaction.guild.channels.cache.filter(
@@ -745,6 +747,7 @@ client.on('interactionCreate', async (interaction) => {
         return;
     }
 
+    // 2. STRING SELECT MENUS
     if (interaction.isStringSelectMenu()) {
         if (interaction.customId === 'setup_category_select') {
             const catId = interaction.values[0];
@@ -834,8 +837,11 @@ client.on('interactionCreate', async (interaction) => {
                 components: []
             });
         }
+
+        return;
     }
 
+    // 3. BUTTONS
     if (interaction.isButton()) {
         const channel = interaction.member?.voice?.channel;
         if (!channel) {
@@ -1130,6 +1136,7 @@ client.on('interactionCreate', async (interaction) => {
         return;
     }
 
+    // 4. MODAL SUBMITS
     if (interaction.isModalSubmit()) {
         const channel = interaction.member?.voice?.channel;
         if (!channel) {
